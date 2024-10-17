@@ -1,0 +1,109 @@
+<BackgroundColor>:
+    background_color: 0, 0, 0, 1
+    canvas.before:
+        Color:
+            rgba: root.background_color
+        Rectangle:
+            size: self.size
+            pos: self.pos
+
+<StyledButton@Button+BackgroundColor>:
+    font_size: self.size[1] * 0.6
+    background_color: 0.23, 0.30, 0.35, 1
+    bold: True
+    border: 4, 4, 4, 4
+    color: 0.95, 0.95, 0.95, 1
+
+<StyledLabel@Label+BackgroundColor>:
+    font_size: self.size[1] * 0.6
+    background_color: 0.95, 0.95, 0.95, 1
+    color: 0, 0, 0, 1
+    text_size: self.size
+    halign: 'center'
+    valign: 'middle'
+
+<BoardOnlyWidget>:
+    board: self.parent.board
+    tree: self.parent.tree
+    engine: self.parent.engine
+
+<BoardControlsWidget>:
+    orientation: "vertical"
+    background_color: 0.23, 0.30, 0.35, 1
+    board: self.parent.board
+    tree: self.parent.tree
+    engine: self.parent.engine
+	num_move_label: num_move_label
+    pass_btn: pass_btn
+
+    Label:
+        size_hint: 1, 0.1
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint: 1, 0.8
+        Label:
+            size_hint: 0.2, 1
+        StyledButton:
+            id: pass_btn
+            size_hint: 0.15, 1
+            text: "Pass"
+            on_release: root.play_pass()
+        Label:
+            size_hint: 0.1, 1
+        StyledButton:
+            size_hint: 0.1, 1
+            text: "|<"
+            on_release: root.undo(999)
+        Label:
+            size_hint: 0.025, 1
+        StyledButton:
+            size_hint: 0.1, 1
+            text: "<"
+            on_release: root.undo()
+        Label:
+            size_hint: 0.025, 1
+        StyledLabel:
+            id: num_move_label
+            size_hint: 0.1, 1
+            text: "0"
+        Label:
+            size_hint: 0.025, 1
+        StyledButton:
+            size_hint: 0.1, 1
+            text: ">"
+            on_release: root.redo()
+        Label:
+            size_hint: 0.025, 1
+        StyledButton:
+            size_hint: 0.1, 1
+            text: ">|"
+            on_release: root.redo(999)
+        Label:
+            size_hint: 0.45, 1
+    Label:
+        size_hint: 1, 0.1
+
+<BoardInfoWidget>:
+    opacity: 1
+    orientation: "vertical"
+    background_color: 0.05, 0.05, 0.05, 1
+
+<FullBoardWidget>:
+    orientation: "vertical"
+    background_color: 0.95, 0.95, 0.95, 1
+
+    BoardOnlyWidget:
+        size_hint: 1, 0.95
+    BoardControlsWidget:
+        size_hint: 1, 0.05
+
+<GameWidget>:
+    orientation: "horizontal"
+    background_color: 0.157, 0.455, 0.753, 1
+
+    Label:
+        size_hint: 0.1, 1
+    FullBoardWidget:
+        size_hint: 0.8, 1
+    Label:
+        size_hint: 0.1, 1
