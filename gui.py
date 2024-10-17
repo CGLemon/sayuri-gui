@@ -298,6 +298,10 @@ class BoardPanelWidget(Widget):
         yd, yp = sorted([(abs(p - y), i) for i, p in enumerate(self.gridpos_y)])[0]
         return xd, xp, yd, yp
 
+class MenuPanelWidget(BoxLayout, BackgroundColor):
+    def __init__(self, **kwargs):
+        super(MenuPanelWidget, self).__init__(**kwargs)
+
 class ControlsPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(ControlsPanelWidget, self).__init__(**kwargs)
@@ -354,6 +358,7 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
 class InfoPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(InfoPanelWidget, self).__init__(**kwargs)
+        # self.event = Clock.schedule_interval(self.update_info, 0.1)
 
 class AnalysisParser(list):
     SUPPORTED_KEYS = [
@@ -429,8 +434,8 @@ class AnalysisParser(list):
 class EngineControls:
     def __init__(self, parent):
         self.parent = parent
-        # self.engine = GtpEngine(Config.get("engine")["command"])
-        self.engine = None
+        self.engine = GtpEngine(Config.get("engine")["command"])
+        # self.engine = None
         self.event = Clock.schedule_interval(self.handel_engine_result, 0.05)
         self.sync_engine_state()
         self._bind()
@@ -521,22 +526,22 @@ class GamePanelWidget(BoxLayout, BackgroundColor):
             self.analyzing_mode ^= True
         return True
 
-class GameWidget(BoxLayout, BackgroundColor, Screen):
+class GameScreenWidget(BoxLayout, BackgroundColor, Screen):
     def __init__(self, **kwargs):
-        super(GameWidget, self).__init__(**kwargs)
+        super(GameScreenWidget, self).__init__(**kwargs)
 
 class WindowApp(App):
-    board_widget = ObjectProperty(None)
+    game_widget = ObjectProperty(None)
 
     def build(self):
         self.title = "Go GUI"
         self.manager = ScreenManager()
 
-        Window.size = (900, 800)
+        Window.size = (1200, 900)
 
-        self.board_widget = GameWidget(name="board")
-        self.manager.add_widget(self.board_widget)
-        self.manager.current = "board"
+        self.game_widget = GameScreenWidget(name="game")
+        self.manager.add_widget(self.game_widget)
+        self.manager.current = "game"
 
         return self.manager
 
@@ -546,6 +551,3 @@ def run_app():
     Builder.load_file(kv_file)
     app = WindowApp()
     app.run()
-
-if __name__ == '__main__':
-    run_app()
