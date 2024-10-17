@@ -26,9 +26,9 @@ kivy.config.Config.set("input", "mouse", "mouse,multitouch_on_demand")
 
 Config = JsonStore("config.json")
 
-def draw_text(pos, text, col, **kw):
-    Color(*col)
-    label = CoreLabel(text=text, bold=True, **kw)
+def draw_text(pos, text, color, **kw):
+    Color(*color)
+    label = CoreLabel(text=text, bold=False, **kw)
     label.refresh()
     Rectangle(
         texture=label.texture,
@@ -38,9 +38,9 @@ def draw_text(pos, text, col, **kw):
 class BackgroundColor(Widget):
     pass
 
-class BoardOnlyWidget(Widget):
+class BoardPanelWidget(Widget):
     def __init__(self, **kwargs):
-        super(BoardOnlyWidget, self).__init__(**kwargs)
+        super(BoardPanelWidget, self).__init__(**kwargs)
         self.ghost_stone = None
         self.last_board_content_tag = None
         self.event = Clock.schedule_interval(self.draw_board_contents, 0.025)
@@ -73,7 +73,7 @@ class BoardOnlyWidget(Widget):
                     { "action" : "play", "color" : col, "vertex" : vtx }
                 )
 
-    def on_touch_move(self, touch):  # on_motion on_touch_move
+    def on_touch_move(self, touch): # on_motion on_touch_move
         return self.on_touch_down(touch)
 
     def on_touch_up(self, touch):
@@ -106,19 +106,30 @@ class BoardOnlyWidget(Widget):
         self.draw_board()
         self.last_board_content_tag = None
 
-    def draw_circle(self, x, y, col=None, outline_col=None, scale=1.0, line_scale=0.075):
+    def draw_circle(self, x, y, color=None, **kwargs):
+        outline_color = kwargs.get("outline_color", None)
+        scale = kwargs.get("scale", 1.0)
+        outline_scale = kwargs.get("outline_scale", 0.065)
+        outline_align = kwargs.get("outline_align", "outer")
         stone_size = self.stone_size * scale
-        if col:
-            Color(*col)
+
+        if outline_color:
+            align_map = {
+                "inner" : 0,
+                "center" : 0.5,
+                "outer" : 1
+            }
+            Color(*outline_color)
+            width=outline_scale * stone_size
+            align_offset = width * align_map.get(outline_align, 0.5)
+            Line(circle=(self.gridpos_x[x], self.gridpos_y[y], stone_size + align_offset), width=width)
+        if color:
+            Color(*color)
             r = stone_size
             Ellipse(pos=(self.gridpos_x[x] - r, self.gridpos_y[y] - r), size=(2 * r, 2 * r))
-        if outline_col:
-            Color(*outline_col)
-            width=line_scale * stone_size
-            Line(circle=(self.gridpos_x[x], self.gridpos_y[y], stone_size+width), width=width)
 
-    def draw_influence(self, x, y, col, scale):
-        Color(*col)
+    def draw_influence(self, x, y, color, scale):
+        Color(*color)
         sz = self.grid_size * scale
         Rectangle(pos=(self.gridpos_x[x] - sz/2, self.gridpos_y[y] - sz/2), size=(sz, sz))
 
@@ -154,7 +165,8 @@ class BoardOnlyWidget(Widget):
             star_scale = (self.grid_size/self.stone_size) * Config.get("ui")["starpoint_size"]
             for x, y in [ (idx % board_size, idx // board_size) for idx in range(board_size * board_size)]:
                 if self.board.is_star((x,y)):
-                    self.draw_circle(x, y, line_color, scale=star_scale)
+                    self.draw_circle(
+                        x, y, line_color, scale=star_scale)
 
             # coordinates
             lo = self.gridpos[0]
@@ -162,12 +174,12 @@ class BoardOnlyWidget(Widget):
                 draw_text(
                     pos=(self.gridpos_x[i], lo_y - lo / 2),
                     text=X_LABELS[i],
-                    col=(0.25, 0.25, 0.25),
+                    color=(0.25, 0.25, 0.25),
                     font_size=self.grid_size / 1.5)
                 draw_text(
                     pos=(lo_x - lo / 2, self.gridpos_y[i]),
                     text=str(i + 1),
-                    col=(0.25, 0.25, 0.25),
+                    color=(0.25, 0.25, 0.25),
                     font_size=self.grid_size / 1.5)
 
     def draw_board_contents(self, *args):
@@ -176,7 +188,6 @@ class BoardOnlyWidget(Widget):
             return
         self.last_board_content_tag = curr_tag
         board = self.tree.get_val()["board"]
-        analysis = self.tree.get_val().get("analysis")
         to_move = board.to_move
 
         self.canvas.clear()
@@ -192,9 +203,10 @@ class BoardOnlyWidget(Widget):
                 self.draw_circle(
                     x, y,
                     stone_colors[color],
-                    outline_colors[color])
-                self.draw_circle(
-                    x, y, inner, scale=0.35)
+                    outline_color=outline_colors[color])
+                if inner:
+                    self.draw_circle(
+                        x, y, inner, scale=0.35)
 
             # hover next move ghost stone
             ghost_alpha = Config.get("ui")["ghost_alpha"]
@@ -204,7 +216,7 @@ class BoardOnlyWidget(Widget):
                     (*stone_colors[to_move], ghost_alpha))
 
             # children of current moves in undo / review
-            undo_alpha = Config.get("ui")["undo_alpha"]
+            undo_colors = Config.get("ui")["undo_colors"]
             children_keys = self.tree.get_children_keys()
             for k in children_keys:
                 col, vtx = k.unpack()
@@ -213,7 +225,7 @@ class BoardOnlyWidget(Widget):
                 x, y = board.vertex_to_xy(vtx)
                 self.draw_circle(
                     x, y,
-                    outline_col=(*stone_colors[col], ghost_alpha))
+                    outline_color=undo_colors[col])
 
             if board.num_passes >= 2:
                 # final positions
@@ -222,55 +234,63 @@ class BoardOnlyWidget(Widget):
                     self.draw_circle(
                         x, y,
                         (*stone_colors[col], ghost_alpha),
-                        outline_colors[col])
+                        outline_color=outline_colors[col])
 
                 finalpos_coord = board.get_finalpos_coord()
                 for col, x, y in finalpos_coord:
                     if col == Board.EMPTY:
                         continue
                     self.draw_influence(x, y, (*stone_colors[col], 0.65), 0.5)
-            elif analysis:
-                # analysis verbose
-                best_color = (0.3, 0.9, 0.9)
-                norm_color = (0.1, 0.75, 0.1)
-                analysis.sort(key=lambda x:x["order"], reverse=True)
-                tot_visits = sum(info["visits"] for info in analysis)
-                max_visits = max(info["visits"] for info in analysis)
+            self.draw_analysis_contents()
 
-                for info in analysis:
-                    if not info["move"].is_move():
-                        continue
-                    x, y = info["move"].get()
-                    visits = info["visits"]
-                    visit_ratio = visits / max_visits
+    def draw_analysis_contents(self):
+        board = self.tree.get_val()["board"]
+        analysis = self.tree.get_val().get("analysis")
+        if board.num_passes < 2 and analysis:
+            # analysis verbose
+            best_color = (0.3, 0.85, 0.85)
+            norm_color = (0.1, 0.75, 0.1)
+            analysis.sort(key=lambda x:x["order"], reverse=True)
+            tot_visits = sum(info["visits"] for info in analysis)
+            max_visits = max(info["visits"] for info in analysis)
 
-                    factor = math.pow(visit_ratio, 0.25)
-                    alpha = factor * 0.75 + (1. - factor) * 0.1
+            for info in analysis:
+                if not info["move"].is_move():
+                    continue
+                x, y = info["move"].get()
+                visits = info["visits"]
+                visit_ratio = visits / max_visits
 
-                    factor = math.pow(visit_ratio, 4.)
-                    analysis_color = [ factor * b + (1. - factor) * n for b, n in zip(best_color, norm_color) ]
-                    self.draw_circle(x, y, (*analysis_color, alpha))
+                alpha_factor = math.pow(visit_ratio, 0.25)
+                alpha = alpha_factor * 0.75 + (1. - alpha_factor) * 0.1
 
-                    if alpha > 0.25:
-                        text_str = text="{}%\n".format(round(info["winrate"] * 100))
-                        if visits >= 1000000000:
-                            text_str += "{:.1f}b".format(visits/1000000000)
-                        elif visits >= 1000000:
-                            text_str += "{:.1f}m".format(visits/1000000)
-                        elif visits >= 1000:
-                            text_str += "{:.1f}k".format(visits/1000)
-                        else:
-                            text_str += "{}".format(visits)
+                eval_factor = math.pow(visit_ratio, 4.)
+                eval_color = [ eval_factor * b + (1. - eval_factor) * n for b, n in zip(best_color, norm_color) ]
+                self.draw_circle(x, y, (*eval_color, alpha))
 
-                        draw_text(
-                            pos=(self.gridpos_x[x], self.gridpos_y[y]),
-                            text=text_str,
-                            col=(0.1, 0.1, 0.1),
-                            font_size=self.grid_size / 3.25,
-                            halign="center")
+                if alpha > 0.25:
+                    text_str = text="{}%\n".format(round(info["winrate"] * 100))
+                    if visits >= 1e9:
+                        text_str += "{:.1f}b".format(visits/1e9)
+                    elif visits >= 1e6:
+                        text_str += "{:.1f}m".format(visits/1e6)
+                    elif visits >= 1e3:
+                        text_str += "{:.1f}k".format(visits/1e3)
                     else:
-                        alinec = (0.5, 0.5, 0.5)
-                        self.draw_circle(x, y, outline_col=(*alinec, alpha))
+                        text_str += "{}".format(visits)
+
+                    draw_text(
+                        pos=(self.gridpos_x[x], self.gridpos_y[y]),
+                        text=text_str,
+                        color=(0.05, 0.05, 0.05),
+                        font_size=self.grid_size / 3.25,
+                        halign="center")
+                else:
+                    self.draw_circle(
+                        x, y,
+                        outline_color=(0.5, 0.5, 0.5, alpha),
+                        outline_scale=0.05,
+                        outline_align="center")
 
     def _find_closest(self, pos):
         x, y = pos
@@ -278,9 +298,9 @@ class BoardOnlyWidget(Widget):
         yd, yp = sorted([(abs(p - y), i) for i, p in enumerate(self.gridpos_y)])[0]
         return xd, xp, yd, yp
 
-class BoardControlsWidget(BoxLayout, BackgroundColor):
+class ControlsPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
-        super(BoardControlsWidget, self).__init__(**kwargs)
+        super(ControlsPanelWidget, self).__init__(**kwargs)
         self.event = Clock.schedule_interval(self.update_info, 0.1)
 
     def update_info(self, *args):
@@ -331,9 +351,9 @@ class BoardControlsWidget(BoxLayout, BackgroundColor):
                 { "action" : "play", "color" : col, "vertex" : vtx }
             )
 
-class BoardInfoWidget(BoxLayout, BackgroundColor):
+class InfoPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
-        super(BoardInfoWidget, self).__init__(**kwargs)
+        super(InfoPanelWidget, self).__init__(**kwargs)
 
 class AnalysisParser(list):
     SUPPORTED_KEYS = [
@@ -409,8 +429,8 @@ class AnalysisParser(list):
 class EngineControls:
     def __init__(self, parent):
         self.parent = parent
-        self.engine = GtpEngine(Config.get("engine")["command"])
-        # self.engine = None
+        # self.engine = GtpEngine(Config.get("engine")["command"])
+        self.engine = None
         self.event = Clock.schedule_interval(self.handel_engine_result, 0.05)
         self.sync_engine_state()
         self._bind()
@@ -479,9 +499,9 @@ class EngineControls:
         self.engine.quit()
         self.engine.shutdown()
 
-class FullBoardWidget(BoxLayout, BackgroundColor):
+class GamePanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
-        super(FullBoardWidget, self).__init__(**kwargs)
+        super(GamePanelWidget, self).__init__(**kwargs)
         self.board = Board(
             Config.get("board")["size"],
             Config.get("board")["komi"]
