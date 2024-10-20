@@ -41,11 +41,40 @@ class BackgroundColor(Widget):
 class BoardPanelWidget(Widget):
     def __init__(self, **kwargs):
         super(BoardPanelWidget, self).__init__(**kwargs)
+        Window.bind(mouse_pos=self.on_mouse_pos)
+        self.pv_start_pos = None
+        self.forbid_pv = False
         self.ghost_stone = None
         self.last_board_content_tag = None
         self.event = Clock.schedule_interval(self.draw_board_contents, 0.025)
 
+    def on_mouse_pos(self, *args): # https://gist.github.com/opqopq/15c707dc4cffc2b6455f
+        if self.get_root_window():  # don't proceed if I'm not displayed <=> If have no parent
+            pos = args[1]
+            relative_pos = self.to_widget(*pos)
+
+            prev_pv_pos = self.pv_start_pos
+            self.pv_start_pos = None
+            if self.collide_point(*relative_pos):
+                analysis = self.tree.get_val().get("analysis")
+                xd, xp, yd, yp = self._find_closest(relative_pos)
+                
+                if analysis and max(yd, xd) < self.grid_size / 2:
+                    for info in analysis:
+                        if not info["move"].is_move():
+                            continue
+                        x, y = info["move"].get()
+                        if x == xp and y == yp:
+                            self.pv_start_pos = (x, y)
+            if prev_pv_pos != self.pv_start_pos:
+                self.tree.update_tag()
+
+
     def on_touch_down(self, touch):
+        if "button" in touch.profile and touch.button == "right":
+            self.forbid_pv = True
+            if self.pv_start_pos:
+                self.tree.update_tag()
         if "button" in touch.profile and touch.button == "left":
             xd, xp, yd, yp = self._find_closest(touch.pos)
             prev_ghost = self.ghost_stone
@@ -77,6 +106,10 @@ class BoardPanelWidget(Widget):
         return self.on_touch_down(touch)
 
     def on_touch_up(self, touch):
+        if "button" in touch.profile and touch.button == "right":
+            self.forbid_pv = False
+            if self.pv_start_pos:
+                self.tree.update_tag()
         if "button" in touch.profile and touch.button == "left":
             if self.ghost_stone:
                 xd, xp, yd, yp = self._find_closest(touch.pos)
@@ -188,7 +221,24 @@ class BoardPanelWidget(Widget):
             return
         self.last_board_content_tag = curr_tag
         board = self.tree.get_val()["board"]
-        to_move = board.to_move
+
+        # sync pv board
+        analysis = self.tree.get_val().get("analysis")
+        show_pv_board = not self.forbid_pv and \
+                            not self.pv_start_pos is None and \
+                            analysis
+        if show_pv_board:
+            board = board.copy()
+            pv_list = list()
+            for info in analysis:
+                if not info["move"].is_move():
+                    continue
+                if info["move"].get() == self.pv_start_pos:
+                    pv_list = info["pv"]
+            for vtx in pv_list:
+                m = vtx.get() if vtx.is_move() else Board.PASS_VERTEX
+                if board.legal(m):
+                    board.play(m)
 
         self.canvas.clear()
         with self.canvas:
@@ -207,41 +257,66 @@ class BoardPanelWidget(Widget):
                 if inner:
                     self.draw_circle(
                         x, y, inner, scale=0.35)
+            if show_pv_board:
+                unique_pv_buf = set()
+                for idx, vtx in reversed(list(enumerate(pv_list))):
+                    if not vtx.is_move():
+                        continue
+                    x, y = vtx.get()
+                    if (x, y) in unique_pv_buf:
+                        continue
+                    unique_pv_buf.add((x,y))
+                    col = board.get_invert_color(board.get_stone((x,y)))
+                    if col in [Board.BLACK, Board.WHITE]:
+                        draw_text(
+                            pos=(self.gridpos_x[x], self.gridpos_y[y]),
+                            text="{}".format(idx+1),
+                            color=stone_colors[col],
+                            font_size=self.grid_size / 2.5,
+                            halign="center")
+                # only draw stones on the board if it is in pv mode
+                return
+            self.draw_auxiliary_contents()
+            self.draw_analysis_contents()
 
-            # hover next move ghost stone
-            ghost_alpha = Config.get("ui")["ghost_alpha"]
-            if self.ghost_stone:
-                self.draw_circle(
-                    *self.ghost_stone,
-                    (*stone_colors[to_move], ghost_alpha))
+    def draw_auxiliary_contents(self):
+        board = self.tree.get_val()["board"]
+        to_move = board.to_move
+        stone_colors = Config.get("ui")["stones"]
 
-            # children of current moves in undo / review
-            undo_colors = Config.get("ui")["undo_colors"]
-            children_keys = self.tree.get_children_keys()
-            for k in children_keys:
-                col, vtx = k.unpack()
-                if vtx == Board.PASS_VERTEX:
-                    continue
-                x, y = board.vertex_to_xy(vtx)
+        # hover next move ghost stone
+        ghost_alpha = Config.get("ui")["ghost_alpha"]
+        if self.ghost_stone:
+            self.draw_circle(
+                *self.ghost_stone,
+                (*stone_colors[to_move], ghost_alpha))
+
+        # children of current moves in undo / review
+        undo_colors = Config.get("ui")["undo_colors"]
+        children_keys = self.tree.get_children_keys()
+        for k in children_keys:
+            col, vtx = k.unpack()
+            if vtx == Board.PASS_VERTEX:
+                continue
+            x, y = board.vertex_to_xy(vtx)
+            self.draw_circle(
+                x, y,
+                outline_color=undo_colors[col])
+
+        if board.num_passes >= 2:
+            # final positions
+            get_deadstones_coord = board.get_deadstones_coord()
+            for col, x, y in get_deadstones_coord:
                 self.draw_circle(
                     x, y,
-                    outline_color=undo_colors[col])
+                    (*stone_colors[col], ghost_alpha),
+                    outline_color=outline_colors[col])
 
-            if board.num_passes >= 2:
-                # final positions
-                get_deadstones_coord = board.get_deadstones_coord()
-                for col, x, y in get_deadstones_coord:
-                    self.draw_circle(
-                        x, y,
-                        (*stone_colors[col], ghost_alpha),
-                        outline_color=outline_colors[col])
-
-                finalpos_coord = board.get_finalpos_coord()
-                for col, x, y in finalpos_coord:
-                    if col == Board.EMPTY:
-                        continue
-                    self.draw_influence(x, y, (*stone_colors[col], 0.65), 0.5)
-            self.draw_analysis_contents()
+            finalpos_coord = board.get_finalpos_coord()
+            for col, x, y in finalpos_coord:
+                if col == Board.EMPTY:
+                    continue
+                self.draw_influence(x, y, (*stone_colors[col], 0.65), 0.5)
 
     def draw_analysis_contents(self):
         board = self.tree.get_val()["board"]

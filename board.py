@@ -149,6 +149,9 @@ class Board:
     def is_last_move(self, vtx):
         return self._get_fancy_coord(vtx) == self.last_move
 
+    def get_invert_color(self, color):
+        return self.invert_color_map[color]
+
     def get_stone(self, vtx):
         return self.state[self._get_fancy_coord(vtx)]
 
