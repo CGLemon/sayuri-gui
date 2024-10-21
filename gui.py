@@ -222,11 +222,12 @@ class BoardPanelWidget(Widget):
         self.last_board_content_tag = curr_tag
         board = self.tree.get_val()["board"]
 
-        # sync pv board
+        # synchronize PV board
         analysis = self.tree.get_val().get("analysis")
         show_pv_board = not self.forbid_pv and \
                             not self.pv_start_pos is None and \
-                            analysis
+                            board.get_stone(self.pv_start_pos) == Board.EMPTY and \
+                            analysis is not None
         if show_pv_board:
             board = board.copy()
             pv_list = list()
@@ -509,8 +510,8 @@ class AnalysisParser(list):
 class EngineControls:
     def __init__(self, parent):
         self.parent = parent
-        self.engine = GtpEngine(Config.get("engine")["command"])
-        # self.engine = None
+        # engine = GtpEngine(Config.get("engine")["command"])
+        self.engine = None
         self.event = Clock.schedule_interval(self.handel_engine_result, 0.05)
         self.sync_engine_state()
         self._bind()
