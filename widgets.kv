@@ -14,6 +14,12 @@
     border: 4, 4, 4, 4
     color: 0.95, 0.95, 0.95, 1
 
+<StyledActionButton@ActionButton>:
+    font_size: self.size[1] * 0.6
+    bold: True
+    border: 4, 4, 4, 4
+    color: 0.95, 0.95, 0.95, 1
+
 <StyledLabel@Label+BackgroundColor>:
     font_size: self.size[1] * 0.6
     background_color: 0.95, 0.95, 0.95, 1
@@ -22,16 +28,17 @@
     halign: 'center'
     valign: 'middle'
 
-# <BoardPanelWidget>:
+<BoardPanelWidget>:
+    config: app.config
+    manager: app.manager
 
 <MenuPanelWidget>:
     orientation: "horizontal"
     background_color: 0.23, 0.30, 0.35, 1
 
-    StyledButton:
+    StyledActionButton:
         text: "+"
         size_hint: 0.1, 1
-        background_color: 0, 0, 0, 0
     Label:
         size_hint: 0.9, 1
 
@@ -40,6 +47,7 @@
     background_color: 0.23, 0.30, 0.35, 1
 	num_move_label: num_move_label
     pass_btn: pass_btn
+    manager: app.manager
 
     Label:
         size_hint: 1, 0.15
@@ -48,20 +56,20 @@
         size_hint: 1, 0.7
         Label:
             size_hint: 0.2, 1
-        StyledButton:
+        StyledActionButton:
             id: pass_btn
             size_hint: 0.15, 1
             text: "Pass"
             on_release: root.play_pass()
         Label:
             size_hint: 0.1, 1
-        StyledButton:
+        StyledActionButton:
             size_hint: 0.1, 1
             text: "|<"
             on_release: root.undo(999)
         Label:
             size_hint: 0.025, 1
-        StyledButton:
+        StyledActionButton:
             size_hint: 0.1, 1
             text: "<"
             on_release: root.undo()
@@ -73,18 +81,22 @@
             text: "0"
         Label:
             size_hint: 0.025, 1
-        StyledButton:
+        StyledActionButton:
             size_hint: 0.1, 1
             text: ">"
             on_release: root.redo()
         Label:
             size_hint: 0.025, 1
-        StyledButton:
+        StyledActionButton:
             size_hint: 0.1, 1
             text: ">|"
             on_release: root.redo(999)
         Label:
-            size_hint: 0.45, 1
+            size_hint: 0.35, 1
+        StyledActionButton:
+            size_hint: 0.1, 1
+            text: "="
+            on_release: root.reset_and_swap()
     Label:
         size_hint: 1, 0.15
 
@@ -108,9 +120,10 @@
         background_color: 0.15, 0.3, 0.4, 1
 
 <GamePanelWidget>:
-    game: self
     orientation: "horizontal"
     background_color: 0.37, 0.5, 0.7, 1
+    board_panel: board_panel
+    config: app.config
 
     BoxLayout:
         orientation: "vertical"
@@ -123,6 +136,7 @@
             Label:
                 size_hint: 0.05, 1
             BoardPanelWidget:
+                id: board_panel
                 size_hint: 0.9, 1
                 board: root.board
                 tree: root.tree
@@ -137,9 +151,73 @@
     InfoPanelWidget:
         size_hint: 0.2, 1
 
-<GameScreenWidget>:
+<SelectBar@BoxLayout>:
     orientation: "horizontal"
-    background_color: 0.157, 0.455, 0.753, 1
+    type: "int"
+    step: 1
+    left_btn: left_btn
+    value_label: value_label
+    right_btn: right_btn
+    StyledActionButton:
+        id: left_btn
+        text: "<"
+        size_hint: 0.25, 1
+        color: 0.05, 0.05, 0.05
+        on_release:
+            val = int(value_label.text) if root.type == "int" else float(value_label.text)
+            val -= root.step
+            value_label.text = str(val)
+    StyledLabel:
+        id: value_label
+        text: "0"
+        size_hint: 0.5, 1
+    StyledActionButton:
+        id: right_btn
+        text: ">"
+        size_hint: 0.25, 1
+        color: 0.05, 0.05, 0.05
+        on_release:
+            val = int(value_label.text) if root.type == "int" else float(value_label.text)
+            val += root.step
+            value_label.text = str(val)
 
-    GamePanelWidget:
-        size_hint: 1, 1
+<GameSettingWidget>:
+    background_color: 0.157, 0.455, 0.753, 1
+    orientation: "horizontal"
+    board_size_bar: board_size_bar
+    komi_bar: komi_bar
+    config: app.config
+
+    Label:
+        size_hint: 0.25, 1
+    BoxLayout:
+        orientation: "vertical"
+        size_hint: 0.5, 1
+        Label:
+            size_hint: 1, 0.4
+        SelectBar:
+            id: board_size_bar
+            size_hint: 1, 0.1
+        Label:
+            size_hint: 1, 0.05
+        SelectBar:
+            id: komi_bar
+            type: "float"
+            step: 0.5
+            size_hint: 1, 0.1
+        Label:
+            size_hint: 1, 0.05
+        StyledButton:
+            size_hint: 1, 0.1
+            text: "Confirm"
+            on_release: root.confirm_and_back()
+        Label:
+            size_hint: 1, 0.05
+        StyledButton:
+            size_hint: 1, 0.1
+            text: "Cancel"
+            on_release: root.back_only()
+        Label:
+            size_hint: 1, 0.4
+    Label:
+        size_hint: 0.25, 1

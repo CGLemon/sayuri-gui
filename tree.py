@@ -46,6 +46,14 @@ class Tree:
         self.root = Node(val)
         self.curr = self.root
 
+    def reset(self, val):
+        self.root.val = val
+        self.root.key = None
+        self.root.default = None
+        self.root.children.clear()
+        self.root.update_tag()
+        self.curr = self.root
+
     def get_tag(self):
         return self.curr.get_tag()
 

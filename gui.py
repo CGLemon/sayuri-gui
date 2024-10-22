@@ -2,7 +2,6 @@ import kivy
 from kivy.app import App 
 from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.image import Image
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.graphics import Rectangle, Line, Ellipse, Color
 
@@ -10,7 +9,7 @@ from kivy.properties import ObjectProperty
 from kivy.lang import Builder
 from kivy.resources import resource_add_path
 from kivy.core.window import Window
-from kivy.core.audio import SoundLoader
+# from kivy.core.audio import SoundLoader
 from kivy.clock import Clock
 
 from kivy.core.text import Label as CoreLabel
@@ -23,8 +22,7 @@ from gtp import GtpEngine, GtpColor, GtpVertex
 import threading, queue
 
 kivy.config.Config.set("input", "mouse", "mouse,multitouch_on_demand")
-
-Config = JsonStore("config.json")
+DefaultConfig = JsonStore("config.json")
 
 def draw_text(pos, text, color, **kw):
     Color(*color)
@@ -175,18 +173,18 @@ class BoardPanelWidget(Widget):
             # board rectangle
             square_size = min(self.width, self.height)
             rect_pos = (self.center_x - square_size/2, self.center_y - square_size/2)
-            Color(*Config.get("ui")["board_color"])
+            Color(*self.config.get("ui")["board_color"])
             board_rect = Rectangle(pos=rect_pos, size=(square_size, square_size))
 
             # grid lines
-            margin = Config.get("ui")["board_margin"]
+            margin = self.config.get("ui")["board_margin"]
             self.grid_size = board_rect.size[0] / (board_size - 1 + 1.5 * margin)
-            self.stone_size = self.grid_size * Config.get("ui")["stone_size"]
+            self.stone_size = self.grid_size * self.config.get("ui")["stone_size"]
             self.gridpos = [math.floor((margin + i) * self.grid_size + 0.5) for i in range(board_size)]
             self.gridpos_x = [v + board_rect.pos[0] for v in self.gridpos]
             self.gridpos_y = [v + board_rect.pos[1] for v in self.gridpos]
 
-            line_color = Config.get("ui")["line_color"]
+            line_color = self.config.get("ui")["line_color"]
             Color(*line_color)
             lo_x, hi_x = self.gridpos_x[0], self.gridpos_x[-1]
             lo_y, hi_y = self.gridpos_y[0], self.gridpos_y[-1]
@@ -195,7 +193,7 @@ class BoardPanelWidget(Widget):
                 Line(points=[(lo_x, self.gridpos_y[i]), (hi_x, self.gridpos_y[i])])
 
             # star points
-            star_scale = (self.grid_size/self.stone_size) * Config.get("ui")["starpoint_size"]
+            star_scale = (self.grid_size/self.stone_size) * self.config.get("ui")["starpoint_size"]
             for x, y in [ (idx % board_size, idx // board_size) for idx in range(board_size * board_size)]:
                 if self.board.is_star((x,y)):
                     self.draw_circle(
@@ -244,9 +242,9 @@ class BoardPanelWidget(Widget):
         self.canvas.clear()
         with self.canvas:
             # stones on board
-            stone_colors = Config.get("ui")["stones"]
-            laststone_colors = Config.get("ui")["laststones"]
-            outline_colors = Config.get("ui").get("outline", [None, None])
+            stone_colors = self.config.get("ui")["stones"]
+            laststone_colors = self.config.get("ui")["laststones"]
+            outline_colors = self.config.get("ui").get("outline")
             light_col = (0.99, 0.99, 0.99)
             stones_coord = board.get_stones_coord()
             for color, x, y in stones_coord:
@@ -283,17 +281,18 @@ class BoardPanelWidget(Widget):
     def draw_auxiliary_contents(self):
         board = self.tree.get_val()["board"]
         to_move = board.to_move
-        stone_colors = Config.get("ui")["stones"]
+        stone_colors = self.config.get("ui")["stones"]
+        outline_colors = self.config.get("ui").get("outline")
 
         # hover next move ghost stone
-        ghost_alpha = Config.get("ui")["ghost_alpha"]
+        ghost_alpha = self.config.get("ui")["ghost_alpha"]
         if self.ghost_stone:
             self.draw_circle(
                 *self.ghost_stone,
                 (*stone_colors[to_move], ghost_alpha))
 
         # children of current moves in undo / review
-        undo_colors = Config.get("ui")["undo_colors"]
+        undo_colors = self.config.get("ui")["undo_colors"]
         children_keys = self.tree.get_children_keys()
         for k in children_keys:
             col, vtx = k.unpack()
@@ -431,6 +430,17 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
                 { "action" : "play", "color" : col, "vertex" : vtx }
             )
 
+    def reset_and_swap(self):
+        self.manager.transition.direction = "right"
+        self.manager.current = "game-setting"
+        self.manager.get_screen("game-setting").sync_config()
+
+    def reset(self):
+        size = self.board.board_size
+        komi = self.board.komi
+        self.board.reset(size, komi)
+        self.tree.reset({ "board" : self.board.copy() })
+
 class InfoPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(InfoPanelWidget, self).__init__(**kwargs)
@@ -510,8 +520,8 @@ class AnalysisParser(list):
 class EngineControls:
     def __init__(self, parent):
         self.parent = parent
-        # engine = GtpEngine(Config.get("engine")["command"])
-        self.engine = None
+        self.engine = GtpEngine(DefaultConfig.get("engine")["command"])
+        # self.engine = None
         self.event = Clock.schedule_interval(self.handel_engine_result, 0.05)
         self.sync_engine_state()
         self._bind()
@@ -580,18 +590,29 @@ class EngineControls:
         self.engine.quit()
         self.engine.shutdown()
 
-class GamePanelWidget(BoxLayout, BackgroundColor):
+class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
+    board = ObjectProperty(None)
+    tree = ObjectProperty(None)
+    engine = ObjectProperty(None)
+
     def __init__(self, **kwargs):
         super(GamePanelWidget, self).__init__(**kwargs)
         self.board = Board(
-            Config.get("board")["size"],
-            Config.get("board")["komi"]
+            DefaultConfig.get("board")["size"],
+            DefaultConfig.get("board")["komi"]
         )
         self.tree = Tree({ "board" : self.board.copy() })
 
         self.engine = EngineControls(self)
         self.analyzing_mode = False
         self._bind()
+
+    def sync_config(self):
+        self.board.reset(self.config.get("board")["size"],
+                             self.config.get("board")["komi"])
+        self.tree.reset({ "board" : self.board.copy() })
+        self.engine.sync_engine_state()
+        self.board_panel.draw_board()
 
     def _bind(self):
         self.keyboard = Window.request_keyboard(None, self, "")
@@ -602,23 +623,34 @@ class GamePanelWidget(BoxLayout, BackgroundColor):
             self.analyzing_mode ^= True
         return True
 
-class GameScreenWidget(BoxLayout, BackgroundColor, Screen):
+class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
     def __init__(self, **kwargs):
-        super(GameScreenWidget, self).__init__(**kwargs)
+        super(GameSettingWidget, self).__init__(**kwargs)
 
-class WindowApp(App):
-    game_widget = ObjectProperty(None)
+    def sync_config(self):
+        self.board_size_bar.value_label.text = str(self.config.get("board")["size"])
+        self.komi_bar.value_label.text = str(self.config.get("board")["komi"])
 
-    def build(self):
-        self.title = "Go GUI"
-        self.manager = ScreenManager()
-
-        Window.size = (1200, 900)
-
-        self.game_widget = GameScreenWidget(name="game")
-        self.manager.add_widget(self.game_widget)
+    def back_only(self):
+        self.manager.transition.direction = "left"
         self.manager.current = "game"
 
+    def confirm_and_back(self):
+        self.back_only()
+        self.config.get("board")["size"] = int(self.board_size_bar.value_label.text)
+        self.config.get("board")["komi"] = float(self.komi_bar.value_label.text)
+        self.manager.get_screen("game").sync_config()
+
+class WindowApp(App):
+    def build(self):
+        self.title = "Go GUI"
+        Window.size = (1200, 900)
+
+        self.config = DefaultConfig
+        self.manager = ScreenManager()
+        self.manager.add_widget(GamePanelWidget(name="game"))
+        self.manager.add_widget(GameSettingWidget(name="game-setting"))
+        self.manager.current = "game"
         return self.manager
 
 def run_app():
