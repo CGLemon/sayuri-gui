@@ -430,16 +430,17 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
                 { "action" : "play", "color" : col, "vertex" : vtx }
             )
 
-    def reset_and_swap(self):
+    def switch_to_gamesetting(self):
         self.manager.transition.direction = "right"
         self.manager.current = "game-setting"
         self.manager.get_screen("game-setting").sync_config()
 
-    def reset(self):
+    def reset_board(self):
         size = self.board.board_size
         komi = self.board.komi
         self.board.reset(size, komi)
         self.tree.reset({ "board" : self.board.copy() })
+        self.engine.sync_engine_state()
 
 class InfoPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
@@ -520,8 +521,11 @@ class AnalysisParser(list):
 class EngineControls:
     def __init__(self, parent):
         self.parent = parent
-        self.engine = GtpEngine(DefaultConfig.get("engine")["command"])
-        # self.engine = None
+        engine_setting = DefaultConfig.get("engine")
+        if engine_setting.get("command"):
+            self.engine = GtpEngine(DefaultConfig.get("engine")["command"])
+        else:
+            self.engine = None
         self.event = Clock.schedule_interval(self.handel_engine_result, 0.05)
         self.sync_engine_state()
         self._bind()
@@ -608,8 +612,9 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
         self._bind()
 
     def sync_config(self):
-        self.board.reset(self.config.get("board")["size"],
-                             self.config.get("board")["komi"])
+        self.board.reset(
+            self.config.get("board")["size"],
+            self.config.get("board")["komi"])
         self.tree.reset({ "board" : self.board.copy() })
         self.engine.sync_engine_state()
         self.board_panel.draw_board()
