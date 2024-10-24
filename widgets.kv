@@ -51,10 +51,12 @@
 <MenuPanelWidget>:
     orientation: "horizontal"
     background_color: 0.23, 0.30, 0.35, 1
+    manager: app.manager
 
     StyledActionButton:
-        text: "+"
+        icon: "img/menu-burger.png"
         size_hint: 0.1, 1
+        on_release: root.switch_to_gameio()
     Label:
         size_hint: 0.9, 1
 
@@ -82,13 +84,13 @@
             size_hint: 0.1, 1
         StyledActionButton:
             size_hint: 0.1, 1
-            text: "|<"
+            icon: "img/angle-double-small-left.png"
             on_release: root.undo(999)
         Label:
             size_hint: 0.025, 1
         StyledActionButton:
             size_hint: 0.1, 1
-            text: "<"
+            icon: "img/angle-small-left.png"
             on_release: root.undo()
         Label:
             size_hint: 0.025, 1
@@ -101,13 +103,13 @@
             size_hint: 0.025, 1
         StyledActionButton:
             size_hint: 0.1, 1
-            text: ">"
+            icon: "img/angle-small-right.png"
             on_release: root.redo()
         Label:
             size_hint: 0.025, 1
         StyledActionButton:
             size_hint: 0.1, 1
-            text: ">|"
+            icon: "img/angle-double-small-right.png"
             on_release: root.redo(999)
         Label:
             size_hint: 0.25, 1
@@ -128,7 +130,14 @@
     background_color: 0.15, 0.3, 0.4, 1
 
     Label:
-        size_hint: 1, 1
+        size_hint: 1, 0.05
+        background_color: 0.15, 0.3, 0.4, 1
+    Image:
+        size_hint: 1, 0.2
+        source: "img/lemon.png"
+        size: self.texture_size
+    Label:
+        size_hint: 1, 0.75
         background_color: 0.15, 0.3, 0.4, 1
 
 <GamePanelWidget>:
@@ -139,7 +148,7 @@
 
     BoxLayout:
         orientation: "vertical"
-        size_hint: 0.8, 1
+        size_hint: 0.75, 1
         MenuPanelWidget:
             size_hint: 1, 0.05
         BoxLayout:
@@ -161,7 +170,7 @@
             tree: root.tree
             engine: root.engine
     InfoPanelWidget:
-        size_hint: 0.2, 1
+        size_hint: 0.25, 1
 
 <SelectBar@BoxLayout>:
     orientation: "horizontal"
@@ -256,3 +265,56 @@
             size_hint: 1, 0.4
     Label:
         size_hint: 0.25, 1
+
+<GameIOWidget>:
+    background_color: 0.37, 0.5, 0.7, 1
+    orientation: "horizontal"
+    config: app.config
+
+    Label:
+        size_hint: 0.25, 1
+    BoxLayout:
+        orientation: "vertical"
+        size_hint: 0.5, 1
+        Label:
+            size_hint: 1, 0.1
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 0.3
+            StyledActionButton:
+                size_hint: 0.45, 1
+                text: "T1"
+                border_color: 0.95, 0.95, 0.95, 1
+            Label:
+                size_hint: 0.1, 1
+            StyledActionButton:
+                size_hint: 0.45, 1
+                text: "T2"
+                border_color: 0.95, 0.95, 0.95, 1
+        Label:
+            size_hint: 1, 0.05
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 0.3
+            StyledActionButton:
+                size_hint: 0.45, 1
+                text: "T3"
+                border_color: 0.95, 0.95, 0.95, 1
+            Label:
+                size_hint: 0.1, 1
+            StyledActionButton:
+                size_hint: 0.45, 1
+                text: "T4"
+                border_color: 0.95, 0.95, 0.95, 1
+        Label:
+            size_hint: 1, 0.05
+        StyledActionButton:
+            size_hint: 1, 0.1
+            icon: "img/check.png"
+            border_color: 0.95, 0.95, 0.95, 1
+            on_release: root.confirm_and_back()
+        Label:
+            size_hint: 1, 0.1
+    Label:
+        size_hint: 0.25, 1
+

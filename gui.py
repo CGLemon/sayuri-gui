@@ -377,6 +377,10 @@ class MenuPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(MenuPanelWidget, self).__init__(**kwargs)
 
+    def switch_to_gameio(self):
+        self.manager.transition.direction = "right"
+        self.manager.current = "game-io"
+
 class ControlsPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(ControlsPanelWidget, self).__init__(**kwargs)
@@ -522,9 +526,11 @@ class EngineControls:
     def __init__(self, parent):
         self.parent = parent
         engine_setting = DefaultConfig.get("engine")
-        if engine_setting.get("command"):
-            self.engine = GtpEngine(DefaultConfig.get("engine")["command"])
-        else:
+        self.engine = None
+        try:
+            if engine_setting.get("command"):
+                self.engine = GtpEngine(DefaultConfig.get("engine")["command"])
+        except Exception:
             self.engine = None
         self.event = Clock.schedule_interval(self.handel_engine_result, 0.05)
         self.sync_engine_state()
@@ -646,6 +652,17 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
         self.config.get("board")["komi"] = float(self.komi_bar.value_label.text)
         self.manager.get_screen("game").sync_config()
 
+class GameIOWidget(BoxLayout, BackgroundColor, Screen):
+    def __init__(self, **kwargs):
+        super(GameIOWidget, self).__init__(**kwargs)
+
+    def back_only(self):
+        self.manager.transition.direction = "left"
+        self.manager.current = "game"
+
+    def confirm_and_back(self):
+        self.back_only()
+
 class WindowApp(App):
     def build(self):
         self.title = "Go GUI"
@@ -655,6 +672,7 @@ class WindowApp(App):
         self.manager = ScreenManager()
         self.manager.add_widget(GamePanelWidget(name="game"))
         self.manager.add_widget(GameSettingWidget(name="game-setting"))
+        self.manager.add_widget(GameIOWidget(name="game-io"))
         self.manager.current = "game"
         return self.manager
 
