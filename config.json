@@ -1,6 +1,8 @@
 {
   "engine" : {
-     "command": "./engine/sayuri -w ./engine/zero-swa-1140k.bin.txt -t 4"
+     "command": "./engine/sayuri -w ./engine/zero-swa-1320k.bin.txt -t 4",
+     "use_ownership": true, 
+     "use_movesownership": false
    },
   "board": {
     "size": 19,

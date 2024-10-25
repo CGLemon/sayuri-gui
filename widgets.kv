@@ -172,7 +172,7 @@
     InfoPanelWidget:
         size_hint: 0.25, 1
 
-<SelectBar@BoxLayout>:
+<NumberSelectBar@BoxLayout>:
     orientation: "horizontal"
     type: "int"
     step: 1
@@ -214,6 +214,48 @@
             val += root.step
             value_label.text = str(val)
 
+<ElementSelectBar@BoxLayout>:
+    orientation: "horizontal"
+    elemset: ["NA"]
+    elemidx: 0
+    itemtext: ""
+    itemcolor: 0, 0, 0, 1
+    itembold: False
+    item_label: item_label
+    left_btn: left_btn
+    elem_label: elem_label
+    right_btn: right_btn
+
+    StyledActionLabel:
+        id: item_label
+        size_hint: 0.25, 1
+        text: root.itemtext
+        color: root.itemcolor
+        bold: root.itembold
+    StyledActionButton:
+        id: left_btn
+        size_hint: 0.25, 1
+        icon: "img/angle-small-left.png"
+        on_release:
+            next_elemidx = root.elemidx - 1
+            root.elemidx = len(root.elemset) - 1 if next_elemidx < 0 else next_elemidx
+            elem_label.text = root.elemset[root.elemidx]
+    StyledActionLabel:
+        id: elem_label
+        text: root.elemset[root.elemidx]
+        size_hint: 0.25, 1
+        color: root.itemcolor
+        bold: root.itembold
+        border_color: root.itemcolor
+    StyledActionButton:
+        id: right_btn
+        size_hint: 0.25, 1
+        icon: "img/angle-small-right.png"
+        on_release:
+            next_elemidx = root.elemidx + 1
+            root.elemidx = 0 if next_elemidx >= len(root.elemset) else next_elemidx
+            elem_label.text = root.elemset[root.elemidx]
+
 <GameSettingWidget>:
     background_color: 0.37, 0.5, 0.7, 1
     orientation: "horizontal"
@@ -228,7 +270,7 @@
         size_hint: 0.5, 1
         Label:
             size_hint: 1, 0.4
-        SelectBar:
+        NumberSelectBar:
             id: board_size_bar
             size_hint: 1, 0.1
             itemtext: "Size"
@@ -236,12 +278,22 @@
             itembold: True
         Label:
             size_hint: 1, 0.05
-        SelectBar:
+        NumberSelectBar:
             id: komi_bar
             size_hint: 1, 0.1
             type: "float"
             step: 0.5
             itemtext: "Komi"
+            itemcolor: 0.95, 0.95, 0.95, 1
+            itembold: True
+
+        Label:
+            size_hint: 1, 0.05
+        ElementSelectBar:
+            id: rule_bar
+            size_hint: 1, 0.1
+            elemset: ["CN"]
+            itemtext: "Rule"
             itemcolor: 0.95, 0.95, 0.95, 1
             itembold: True
         Label:

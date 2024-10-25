@@ -20,6 +20,7 @@ from tree import Tree, NodeKey
 from board import Board
 from gtp import GtpEngine, GtpColor, GtpVertex
 import threading, queue
+import sys
 
 kivy.config.Config.set("input", "mouse", "mouse,multitouch_on_demand")
 DefaultConfig = JsonStore("config.json")
@@ -226,6 +227,7 @@ class BoardPanelWidget(Widget):
                             not self.pv_start_pos is None and \
                             board.get_stone(self.pv_start_pos) == Board.EMPTY and \
                             analysis is not None
+        main_info = None
         if show_pv_board:
             board = board.copy()
             pv_list = list()
@@ -233,6 +235,7 @@ class BoardPanelWidget(Widget):
                 if not info["move"].is_move():
                     continue
                 if info["move"].get() == self.pv_start_pos:
+                    main_info = info
                     pv_list = info["pv"]
             for vtx in pv_list:
                 m = vtx.get() if vtx.is_move() else Board.PASS_VERTEX
@@ -247,6 +250,7 @@ class BoardPanelWidget(Widget):
             outline_colors = self.config.get("ui").get("outline")
             light_col = (0.99, 0.99, 0.99)
             stones_coord = board.get_stones_coord()
+
             for color, x, y in stones_coord:
                 inner = laststone_colors[color] if board.is_last_move((x,y)) else None
                 self.draw_circle(
@@ -257,6 +261,8 @@ class BoardPanelWidget(Widget):
                     self.draw_circle(
                         x, y, inner, scale=0.35)
             if show_pv_board:
+                if main_info.get("movesownership"):
+                    self.draw_ownermap(main_info["movesownership"])
                 unique_pv_buf = set()
                 for idx, vtx in reversed(list(enumerate(pv_list))):
                     if not vtx.is_move():
@@ -273,6 +279,7 @@ class BoardPanelWidget(Widget):
                             color=stone_colors[col],
                             font_size=self.grid_size / 2.5,
                             halign="center")
+
                 # only draw stones on the board if it is in pv mode
                 return
             self.draw_auxiliary_contents()
@@ -316,11 +323,13 @@ class BoardPanelWidget(Widget):
             for col, x, y in finalpos_coord:
                 if col == Board.EMPTY:
                     continue
-                self.draw_influence(x, y, (*stone_colors[col], 0.65), 0.5)
+                self.draw_influence(x, y, (*stone_colors[col], 0.65), 0.55)
 
     def draw_analysis_contents(self):
         board = self.tree.get_val()["board"]
         analysis = self.tree.get_val().get("analysis")
+        forbidmap = list()
+
         if board.num_passes < 2 and analysis:
             # analysis verbose
             best_color = (0.3, 0.85, 0.85)
@@ -334,9 +343,9 @@ class BoardPanelWidget(Widget):
                     continue
                 x, y = info["move"].get()
                 visits = info["visits"]
-                visit_ratio = visits / max_visits
+                visit_ratio = visits / max_visits 
 
-                alpha_factor = math.pow(visit_ratio, 0.25)
+                alpha_factor = math.pow(visit_ratio, 0.3)
                 alpha = alpha_factor * 0.75 + (1. - alpha_factor) * 0.1
 
                 eval_factor = math.pow(visit_ratio, 4.)
@@ -360,12 +369,35 @@ class BoardPanelWidget(Widget):
                         color=(0.05, 0.05, 0.05),
                         font_size=self.grid_size / 3.25,
                         halign="center")
+                    forbidmap.append((x,y))
                 else:
                     self.draw_circle(
                         x, y,
                         outline_color=(0.5, 0.5, 0.5, alpha),
                         outline_scale=0.05,
                         outline_align="center")
+
+            if len(analysis.root_ownership) > 0:
+                self.draw_ownermap(analysis.root_ownership, forbidmap)
+
+    def draw_ownermap(self, ownermap, forbidmap=[]):
+        board = self.tree.get_val()["board"]
+        stone_colors = self.config.get("ui")["stones"]
+        board_size = board.board_size
+        to_move = board.to_move
+
+        rowmajor_idx = 0
+        for y in range(board_size)[::-1]:
+            for x in range(board_size):
+                owner = ownermap[rowmajor_idx]
+                col = to_move if owner > 0.0 else self.board.get_invert_color(to_move)
+                influ_factor = math.pow(math.fabs(owner), 0.75)
+                influ_alpha = influ_factor * 0.65
+                influ_size = influ_factor * 0.55 + (1.0 - influ_factor) * 0.25
+
+                if not (x, y) in forbidmap:
+                    self.draw_influence(x, y, (*stone_colors[col], influ_alpha), influ_size)
+                rowmajor_idx += 1
 
     def _find_closest(self, pos):
         x, y = pos
@@ -459,6 +491,7 @@ class AnalysisParser(list):
         super(AnalysisParser, self).__init__()
         self.data = data
         self.datalist = data.split()
+        self.root_ownership = list()
         self._parse()
 
     def _back(self):
@@ -473,10 +506,28 @@ class AnalysisParser(list):
 
     def _next_number(self):
         t = self._next_token()
+        return self._token_to_number(t)
+
+    def _token_to_number(self, t):
         try:
             return int(t)
         except ValueError:
             return float(t)
+
+    def _get_sequential_tokens(self, trans_fn=None):
+        tokens = list()
+        while True:
+            token = self._next_token()
+            if token == None: 
+                break
+            if token in self.SUPPORTED_KEYS:
+                self._back()
+                break
+            if trans_fn:
+                tokens.append(trans_fn(token))
+            else:
+                tokens.append(token)
+        return tokens
 
     def _parse(self):
         self.idx = 0
@@ -486,6 +537,10 @@ class AnalysisParser(list):
                 break
             if token == "info":
                 self.append(dict())
+            elif token == "ownership":
+                self.root_ownership = self._get_sequential_tokens(
+                    self._token_to_number
+                )
             elif token == "move":
                 self[-1]["move"] = GtpVertex(self._next_token())
             elif token == "visits":
@@ -510,15 +565,13 @@ class AnalysisParser(list):
             elif token == "order":
                 self[-1]["order"] = self._next_number()
             elif token == "pv":
-                self[-1]["pv"] = list()
-                while True:
-                    vstr = self._next_token()
-                    if vstr == None: 
-                        break
-                    if vstr in self.SUPPORTED_KEYS:
-                        self._back()
-                        break
-                    self[-1]["pv"].append(GtpVertex(vstr))
+                self[-1]["pv"] = self._get_sequential_tokens(
+                    GtpVertex
+                )
+            elif token == "movesownership":
+                self[-1]["movesownership"] = self._get_sequential_tokens(
+                    self._token_to_number
+                )
             else:
                 pass
 
@@ -526,18 +579,34 @@ class EngineControls:
     def __init__(self, parent):
         self.parent = parent
         engine_setting = DefaultConfig.get("engine")
+
         self.engine = None
+        self.use_ownership = DefaultConfig.get("engine")["use_ownership"]
+        self.use_movesownership = DefaultConfig.get("engine")["use_movesownership"]
         try:
             if engine_setting.get("command"):
                 self.engine = GtpEngine(DefaultConfig.get("engine")["command"])
         except Exception:
             self.engine = None
+        self._check_engine()
+
         self.event = Clock.schedule_interval(self.handel_engine_result, 0.05)
         self.sync_engine_state()
         self._bind()
 
     def _bind(self):
         Window.bind(on_request_close=self.on_request_close)
+
+    def _check_engine(self):
+        if not self.engine:
+            return
+        name = self.engine.name()
+        if name.lower() != "sayuri":
+            self.engine.quit()
+            self.engine.shutdown()
+            self.engine = None
+            sys.stderr.write("Must be Sayuri engine.\n")
+            sys.stderr.flush()
 
     def sync_engine_state(self):
         if not self.engine:
@@ -561,7 +630,11 @@ class EngineControls:
             self.engine.send_command("undo")
         elif action["action"] == "analyze":
             col = action["color"]
-            self.engine.send_command("lz-analyze {} {}".format(col, 50))
+            ownership = self.use_ownership
+            movesownership = self.use_movesownership
+            self.engine.send_command(
+                "sayuri-analyze {} {} ownership {} movesownership {}".format(
+                col, 50, ownership, movesownership))
             self.analyzing = True
         elif action["action"] == "stop-analyze":
             self.engine.send_command("protocol_version")
