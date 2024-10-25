@@ -116,11 +116,11 @@
         StyledActionButton:
             size_hint: 0.1, 1
             icon: "img/refresh.png"
-            on_release: root.reset_board()
+            on_release: root.switch_to_gamesetting()
         StyledActionButton:
             size_hint: 0.1, 1
-            icon: "img/menu-dots-vertical.png"
-            on_release: root.switch_to_gamesetting()
+            icon: "img/settings-sliders.png"
+            on_release: root.switch_to_gameanalysis()
     Label:
         size_hint: 1, 0.15
 
@@ -175,7 +175,9 @@
 <NumberSelectBar@BoxLayout>:
     orientation: "horizontal"
     type: "int"
-    step: 1
+    valstep: 1
+    valmax: None
+    valmin: None
     itemtext: ""
     itemcolor: 0, 0, 0, 1
     itembold: False
@@ -186,17 +188,19 @@
 
     StyledActionLabel:
         id: item_label
-        size_hint: 0.25, 1
+        size_hint: 0.45, 1
         text: root.itemtext
         color: root.itemcolor
         bold: root.itembold
     StyledActionButton:
         id: left_btn
-        size_hint: 0.25, 1
+        size_hint: 0.15, 1
         icon: "img/angle-small-left.png"
         on_release:
             val = int(value_label.text) if root.type == "int" else float(value_label.text)
-            val -= root.step
+            val -= root.valstep
+            val = root.valmin if root.valmin is not None and val < root.valmin else val
+            val = root.valmax if root.valmax is not None and val > root.valmax else val
             value_label.text = str(val)
     StyledActionLabel:
         id: value_label
@@ -207,11 +211,13 @@
         border_color: root.itemcolor
     StyledActionButton:
         id: right_btn
-        size_hint: 0.25, 1
+        size_hint: 0.15, 1
         icon: "img/angle-small-right.png"
         on_release:
             val = int(value_label.text) if root.type == "int" else float(value_label.text)
-            val += root.step
+            val += root.valstep
+            val = root.valmin if root.valmin is not None and val < root.valmin else val
+            val = root.valmax if root.valmax is not None and val > root.valmax else val
             value_label.text = str(val)
 
 <ElementSelectBar@BoxLayout>:
@@ -228,13 +234,13 @@
 
     StyledActionLabel:
         id: item_label
-        size_hint: 0.25, 1
+        size_hint: 0.45, 1
         text: root.itemtext
         color: root.itemcolor
         bold: root.itembold
     StyledActionButton:
         id: left_btn
-        size_hint: 0.25, 1
+        size_hint: 0.15, 1
         icon: "img/angle-small-left.png"
         on_release:
             next_elemidx = root.elemidx - 1
@@ -249,18 +255,81 @@
         border_color: root.itemcolor
     StyledActionButton:
         id: right_btn
-        size_hint: 0.25, 1
+        size_hint: 0.15, 1
         icon: "img/angle-small-right.png"
         on_release:
             next_elemidx = root.elemidx + 1
             root.elemidx = 0 if next_elemidx >= len(root.elemset) else next_elemidx
             elem_label.text = root.elemset[root.elemidx]
 
+<GameAnalysisWidget>:
+    background_color: 0.37, 0.5, 0.7, 1
+    orientation: "horizontal"
+    show_bar: show_bar
+    ownership_bar: ownership_bar
+    move_ownership_bar: move_ownership_bar
+    config: app.config
+
+    Label:
+        size_hint: 0.25, 1
+    BoxLayout:
+        orientation: "vertical"
+        size_hint: 0.5, 1
+        Label:
+            size_hint: 1, 0.4
+        ElementSelectBar:
+            id: show_bar
+            size_hint: 1, 0.1
+            elemset: ["W+V", "S+V", "W+V+S", "P", "R"]
+            itemtext: "Show"
+            itemcolor: 0.95, 0.95, 0.95, 1
+            itembold: True
+        Label:
+            size_hint: 1, 0.05
+        ElementSelectBar:
+            id: ownership_bar
+            size_hint: 1, 0.1
+            elemset: ["False", "True"]
+            itemtext: "Ownership"
+            itemcolor: 0.95, 0.95, 0.95, 1
+            itembold: True
+        Label:
+            size_hint: 1, 0.05
+        ElementSelectBar:
+            id: move_ownership_bar
+            size_hint: 1, 0.1
+            elemset: ["False", "True"]
+            itemtext: "Move Ownership"
+            itemcolor: 0.95, 0.95, 0.95, 1
+            itembold: True
+        Label:
+            size_hint: 1, 0.25
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint: 1, 0.1
+            StyledActionButton:
+                size_hint: 0.45, 1
+                icon: "img/check.png"
+                on_release: root.confirm_and_back()
+                border_color: 0.95, 0.95, 0.95, 1
+            Label:
+                size_hint: 0.1, 1
+            StyledActionButton:
+                size_hint: 0.45, 1
+                icon: "img/cross.png"
+                on_release: root.back_only()
+                border_color: 0.95, 0.95, 0.95, 1
+        Label:
+            size_hint: 1, 0.4
+    Label:
+        size_hint: 0.25, 1
+
 <GameSettingWidget>:
     background_color: 0.37, 0.5, 0.7, 1
     orientation: "horizontal"
     board_size_bar: board_size_bar
     komi_bar: komi_bar
+    rule_bar: rule_bar
     config: app.config
 
     Label:
@@ -273,6 +342,8 @@
         NumberSelectBar:
             id: board_size_bar
             size_hint: 1, 0.1
+            valmax: root.config.get("board")["maxsize"]
+            valmin: root.config.get("board")["minsize"]
             itemtext: "Size"
             itemcolor: 0.95, 0.95, 0.95, 1
             itembold: True
@@ -282,11 +353,10 @@
             id: komi_bar
             size_hint: 1, 0.1
             type: "float"
-            step: 0.5
+            valstep: 0.5
             itemtext: "Komi"
             itemcolor: 0.95, 0.95, 0.95, 1
             itembold: True
-
         Label:
             size_hint: 1, 0.05
         ElementSelectBar:

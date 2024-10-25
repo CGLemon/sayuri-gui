@@ -1,12 +1,15 @@
 {
   "engine" : {
      "command": "./engine/sayuri -w ./engine/zero-swa-1320k.bin.txt -t 4",
-     "use_ownership": true, 
+     "show": "W+V",
+     "use_ownership": false, 
      "use_movesownership": false
    },
   "board": {
     "size": 19,
-    "komi": 7.5
+    "komi": -7.5,
+    "maxsize": 19,
+    "minsize": 2
   },
   "ui": {
     "stones": [ [0.1, 0.1, 0.1], [0.9, 0.9, 0.9] ],

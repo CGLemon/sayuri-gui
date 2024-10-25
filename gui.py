@@ -248,6 +248,7 @@ class BoardPanelWidget(Widget):
             stone_colors = self.config.get("ui")["stones"]
             laststone_colors = self.config.get("ui")["laststones"]
             outline_colors = self.config.get("ui").get("outline")
+            movesownership = self.config.get("engine")["use_movesownership"]
             light_col = (0.99, 0.99, 0.99)
             stones_coord = board.get_stones_coord()
 
@@ -261,7 +262,7 @@ class BoardPanelWidget(Widget):
                     self.draw_circle(
                         x, y, inner, scale=0.35)
             if show_pv_board:
-                if main_info.get("movesownership"):
+                if movesownership and main_info.get("movesownership"):
                     self.draw_ownermap(main_info["movesownership"])
                 unique_pv_buf = set()
                 for idx, vtx in reversed(list(enumerate(pv_list))):
@@ -328,6 +329,8 @@ class BoardPanelWidget(Widget):
     def draw_analysis_contents(self):
         board = self.tree.get_val()["board"]
         analysis = self.tree.get_val().get("analysis")
+        ownership = self.config.get("engine")["use_ownership"]
+        show = self.config.get("engine")["show"]
         forbidmap = list()
 
         if board.num_passes < 2 and analysis:
@@ -353,21 +356,44 @@ class BoardPanelWidget(Widget):
                 self.draw_circle(x, y, (*eval_color, alpha))
 
                 if alpha > 0.25:
-                    text_str = text="{}%\n".format(round(info["winrate"] * 100))
-                    if visits >= 1e9:
-                        text_str += "{:.1f}b".format(visits/1e9)
-                    elif visits >= 1e6:
-                        text_str += "{:.1f}m".format(visits/1e6)
-                    elif visits >= 1e3:
-                        text_str += "{:.1f}k".format(visits/1e3)
-                    else:
-                        text_str += "{}".format(visits)
+                    show_lines = 0
+                    text_str = str()
+                    for show_mode in show.split("+"):
+                        if show_mode in ["W", "S", "V", "P"] and len(text_str) > 0:
+                            show_lines += 1
+                            text_str += "\n"
+                        if "W" == show_mode:
+                            text_str += "{}%".format(round(info["winrate"] * 100))
+                        elif "S" == show_mode:
+                            text_str += "{:.1f}".format(info["scorelead"])
+                        elif "V" == show_mode:
+                            if visits >= 1e11:
+                                text_str += "{:.0f}b".format(visits/1e9)
+                            elif visits >= 1e9:
+                                text_str += "{:.1f}b".format(visits/1e9)
+                            elif visits >= 1e8:
+                                text_str += "{:.0f}m".format(visits/1e6)
+                            elif visits >= 1e6:
+                                text_str += "{:.1f}m".format(visits/1e6)
+                            elif visits >= 1e5:
+                                text_str += "{:.0f}k".format(visits/1e3)
+                            elif visits >= 1e3:
+                                text_str += "{:.1f}k".format(visits/1e3)
+                            else:
+                                text_str += "{}".format(visits)
+                        elif "P" == show_mode:
+                            text_str += "{:.1f}%".format(info["prior"] * 100)
+                        elif "R" == show_mode:
+                            text_str += "{:.1f}%".format((visits/tot_visits) * 100)
 
+                    show_lines = min(show_lines, 2)
+                    show_lines = max(show_lines, 0)
+                    font_size_div = [3.0, 3.25, 4.05][show_lines]
                     draw_text(
                         pos=(self.gridpos_x[x], self.gridpos_y[y]),
                         text=text_str,
                         color=(0.05, 0.05, 0.05),
-                        font_size=self.grid_size / 3.25,
+                        font_size=self.grid_size / font_size_div,
                         halign="center")
                     forbidmap.append((x,y))
                 else:
@@ -377,7 +403,7 @@ class BoardPanelWidget(Widget):
                         outline_scale=0.05,
                         outline_align="center")
 
-            if len(analysis.root_ownership) > 0:
+            if ownership and len(analysis.root_ownership) > 0:
                 self.draw_ownermap(analysis.root_ownership, forbidmap)
 
     def draw_ownermap(self, ownermap, forbidmap=[]):
@@ -471,6 +497,11 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
         self.manager.current = "game-setting"
         self.manager.get_screen("game-setting").sync_config()
 
+    def switch_to_gameanalysis(self):
+        self.manager.transition.direction = "right"
+        self.manager.current = "game-analysis"
+        self.manager.get_screen("game-analysis").sync_config()
+
     def reset_board(self):
         size = self.board.board_size
         komi = self.board.komi
@@ -551,7 +582,7 @@ class AnalysisParser(list):
                     num = float(num) / 10000.
                 self[-1]["winrate"] = num
             elif token == "scorelead":
-                self[-1]["score"] = self._next_number()
+                self[-1]["scorelead"] = self._next_number()
             elif token == "prior":
                 num = self._next_number()
                 if type(num) == int:
@@ -581,8 +612,6 @@ class EngineControls:
         engine_setting = DefaultConfig.get("engine")
 
         self.engine = None
-        self.use_ownership = DefaultConfig.get("engine")["use_ownership"]
-        self.use_movesownership = DefaultConfig.get("engine")["use_movesownership"]
         try:
             if engine_setting.get("command"):
                 self.engine = GtpEngine(DefaultConfig.get("engine")["command"])
@@ -611,12 +640,24 @@ class EngineControls:
     def sync_engine_state(self):
         if not self.engine:
             return
+        board = self.parent.board
         self.analyzing = False
         self.last_board_content_tag = None
         self.last_rep_command = None
         self.engine.send_command("clear_board")
-        self.engine.send_command("boardsize {}".format(self.parent.board.board_size))
-        self.engine.send_command("komi {}".format(self.parent.board.komi))
+        self.engine.send_command("boardsize {}".format(board.board_size))
+        self.engine.send_command("komi {}".format(board.komi))
+
+        leaf_tag = self.parent.tree.get_tag()
+        curr = self.parent.tree.root
+        while leaf_tag != curr.get_tag():
+            curr = curr.default
+            to_move, played_move = curr.get_key().unpack()
+            col = board.get_gtp_color(to_move)
+            vtx = board.get_gtp_vertex(played_move)
+            self.do_action(
+                { "action" : "play", "color" : col, "vertex" : vtx }
+            )
 
     def do_action(self, action):
         if not self.engine:
@@ -630,8 +671,8 @@ class EngineControls:
             self.engine.send_command("undo")
         elif action["action"] == "analyze":
             col = action["color"]
-            ownership = self.use_ownership
-            movesownership = self.use_movesownership
+            ownership = self.parent.config.get("engine")["use_ownership"]
+            movesownership = self.parent.config.get("engine")["use_movesownership"]
             self.engine.send_command(
                 "sayuri-analyze {} {} ownership {} movesownership {}".format(
                 col, 50, ownership, movesownership))
@@ -707,6 +748,48 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
             self.analyzing_mode ^= True
         return True
 
+class GameAnalysisWidget(BoxLayout, BackgroundColor, Screen):
+    def __init__(self, **kwargs):
+        super(GameAnalysisWidget, self).__init__(**kwargs)
+
+    def sync_config(self):
+        self.show_bar.elem_label.text = self.config.get("engine")["show"]
+        self.ownership_bar.elem_label.text = str(self.config.get("engine")["use_ownership"])
+        self.move_ownership_bar.elem_label.text = str(self.config.get("engine")["use_movesownership"])
+
+        all_bars = [
+            self.show_bar,
+            self.ownership_bar,
+            self.move_ownership_bar
+        ]
+        for bar in all_bars:
+            elemidx = 0
+            for idx in range(len(bar.elemset)):
+                if bar.elemset[idx] == bar.elem_label.text:
+                    elemidx = idx
+                    break
+            bar.elem_label.text = bar.elemset[elemidx]
+            bar.elemidx = elemidx
+
+
+    def back_only(self):
+        self.manager.transition.direction = "left"
+        self.manager.current = "game"
+
+    def confirm_and_back(self):
+        self.config.get("engine")["show"] = self.show_bar.elem_label.text
+        self.config.get("engine")["use_ownership"] = \
+            self._text_to_bool(self.ownership_bar.elem_label.text)
+        self.config.get("engine")["use_movesownership"] = \
+            self._text_to_bool(self.move_ownership_bar.elem_label.text)
+        self.manager.get_screen("game").engine.do_action(
+            { "action" : "stop-analyze" }
+        )
+        self.back_only()
+
+    def _text_to_bool(self, text):
+        return text.lower() == "true"
+
 class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
     def __init__(self, **kwargs):
         super(GameSettingWidget, self).__init__(**kwargs)
@@ -715,15 +798,27 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
         self.board_size_bar.value_label.text = str(self.config.get("board")["size"])
         self.komi_bar.value_label.text = str(self.config.get("board")["komi"])
 
+        all_bars = [
+            self.rule_bar
+        ]
+        for bar in all_bars:
+            elemidx = 0
+            for idx in range(len(bar.elemset)):
+                if bar.elemset[idx] == bar.elem_label.text:
+                    elemidx = idx
+                    break
+            bar.elem_label.text = bar.elemset[elemidx]
+            bar.elemidx = elemidx
+
     def back_only(self):
         self.manager.transition.direction = "left"
         self.manager.current = "game"
 
     def confirm_and_back(self):
-        self.back_only()
         self.config.get("board")["size"] = int(self.board_size_bar.value_label.text)
         self.config.get("board")["komi"] = float(self.komi_bar.value_label.text)
         self.manager.get_screen("game").sync_config()
+        self.back_only()
 
 class GameIOWidget(BoxLayout, BackgroundColor, Screen):
     def __init__(self, **kwargs):
@@ -745,6 +840,7 @@ class WindowApp(App):
         self.manager = ScreenManager()
         self.manager.add_widget(GamePanelWidget(name="game"))
         self.manager.add_widget(GameSettingWidget(name="game-setting"))
+        self.manager.add_widget(GameAnalysisWidget(name="game-analysis"))
         self.manager.add_widget(GameIOWidget(name="game-io"))
         self.manager.current = "game"
         return self.manager
