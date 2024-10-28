@@ -1,13 +1,15 @@
 {
   "engine" : {
-     "command": "./engine/sayuri -w ./engine/zero-swa-1320k.bin.txt -t 4",
+     "command": "./engine/sayuri -w ./engine/zero-swa-1140k.bin.txt --use-optimistic-policy -t 4",
      "show": "W+V",
+     "pv": true,
      "use_ownership": false, 
      "use_movesownership": false
    },
   "board": {
     "size": 19,
-    "komi": -7.5,
+    "komi": 6.5,
+    "rule": "japanese",
     "maxsize": 19,
     "minsize": 2
   },

@@ -126,19 +126,37 @@
 
 <InfoPanelWidget>:
     opacity: 1
-    orientation: "vertical"
+    orientation: "horizontal"
     background_color: 0.15, 0.3, 0.4, 1
+    infobox: infobox
 
     Label:
-        size_hint: 1, 0.05
-        background_color: 0.15, 0.3, 0.4, 1
-    Image:
-        size_hint: 1, 0.2
-        source: "img/lemon.png"
-        size: self.texture_size
+        size_hint: 0.05, 1
+    BoxLayout:
+        orientation: "vertical"
+        size_hint: 0.9, 1
+        Label:
+            size_hint: 1, 0.05
+        Image:
+            size_hint: 1, 0.2
+            source: "img/lemon.png"
+            size: self.texture_size
+        Label:
+            size_hint: 1, 0.025
+        Label:
+            id: infobox
+            size_hint: 1, 0.7
+            color: 0, 0, 0, 1
+            canvas.before:
+                Color:
+                    rgba: 0.95, 0.95, 0.95, 1
+                Rectangle:
+                    size: self.size
+                    pos: self.pos
+        Label:
+            size_hint: 1, 0.025
     Label:
-        size_hint: 1, 0.75
-        background_color: 0.15, 0.3, 0.4, 1
+        size_hint: 0.05, 1
 
 <GamePanelWidget>:
     orientation: "horizontal"
@@ -171,6 +189,9 @@
             engine: root.engine
     InfoPanelWidget:
         size_hint: 0.25, 1
+        board: root.board
+        tree: root.tree
+        engine: root.engine
 
 <NumberSelectBar@BoxLayout>:
     orientation: "horizontal"
@@ -266,6 +287,7 @@
     background_color: 0.37, 0.5, 0.7, 1
     orientation: "horizontal"
     show_bar: show_bar
+    pv_bar: pv_bar
     ownership_bar: ownership_bar
     move_ownership_bar: move_ownership_bar
     config: app.config
@@ -282,6 +304,16 @@
             size_hint: 1, 0.1
             elemset: ["W+V", "S+V", "W+V+S", "P", "R"]
             itemtext: "Show"
+            itemcolor: 0.95, 0.95, 0.95, 1
+            itembold: True
+        Label:
+            size_hint: 1, 0.05
+        ElementSelectBar:
+            id: pv_bar
+            size_hint: 1, 0.1
+            elemset: ["False", "True"]
+            elemidx: 1
+            itemtext: "PV"
             itemcolor: 0.95, 0.95, 0.95, 1
             itembold: True
         Label:
@@ -362,7 +394,7 @@
         ElementSelectBar:
             id: rule_bar
             size_hint: 1, 0.1
-            elemset: ["CN"]
+            elemset: ["CN", "JP"]
             itemtext: "Rule"
             itemcolor: 0.95, 0.95, 0.95, 1
             itembold: True

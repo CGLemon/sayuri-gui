@@ -68,7 +68,6 @@ class BoardPanelWidget(Widget):
             if prev_pv_pos != self.pv_start_pos:
                 self.tree.update_tag()
 
-
     def on_touch_down(self, touch):
         if "button" in touch.profile and touch.button == "right":
             self.forbid_pv = True
@@ -222,11 +221,13 @@ class BoardPanelWidget(Widget):
         board = self.tree.get_val()["board"]
 
         # synchronize PV board
+        pv = self.config.get("engine")["pv"]
         analysis = self.tree.get_val().get("analysis")
         show_pv_board = not self.forbid_pv and \
                             not self.pv_start_pos is None and \
                             board.get_stone(self.pv_start_pos) == Board.EMPTY and \
-                            analysis is not None
+                            analysis is not None and \
+                            pv
         main_info = None
         if show_pv_board:
             board = board.copy()
@@ -363,7 +364,7 @@ class BoardPanelWidget(Widget):
                             show_lines += 1
                             text_str += "\n"
                         if "W" == show_mode:
-                            text_str += "{}%".format(round(info["winrate"] * 100))
+                            text_str += "{}".format(round(info["winrate"] * 100))
                         elif "S" == show_mode:
                             text_str += "{:.1f}".format(info["scorelead"])
                         elif "V" == show_mode:
@@ -382,9 +383,9 @@ class BoardPanelWidget(Widget):
                             else:
                                 text_str += "{}".format(visits)
                         elif "P" == show_mode:
-                            text_str += "{:.1f}%".format(info["prior"] * 100)
+                            text_str += "{:.1f}".format(info["prior"] * 100)
                         elif "R" == show_mode:
-                            text_str += "{:.1f}%".format((visits/tot_visits) * 100)
+                            text_str += "{:.1f}".format((visits/tot_visits) * 100)
 
                     show_lines = min(show_lines, 2)
                     show_lines = max(show_lines, 0)
@@ -436,8 +437,9 @@ class MenuPanelWidget(BoxLayout, BackgroundColor):
         super(MenuPanelWidget, self).__init__(**kwargs)
 
     def switch_to_gameio(self):
-        self.manager.transition.direction = "right"
-        self.manager.current = "game-io"
+        # self.manager.transition.direction = "right"
+        # self.manager.current = "game-io"
+        pass
 
 class ControlsPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
@@ -512,7 +514,17 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
 class InfoPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(InfoPanelWidget, self).__init__(**kwargs)
-        # self.event = Clock.schedule_interval(self.update_info, 0.1)
+        self.event = Clock.schedule_interval(self.update_info, 0.1)
+
+    def update_info(self, *args):
+        self.infobox.text = ""
+        if self.board.num_passes >= 2:
+            scores = [0] * 4
+            finalpos_coord = self.board.get_finalpos_coord()
+            for col, _, _ in finalpos_coord:
+                scores[col] += 1
+            self.infobox.text += "Black Score: {:.1f}".format(scores[Board.BLACK] - self.board.komi)
+            self.infobox.text += "\nWhite Score: {:.1f}".format(scores[Board.WHITE])
 
 class AnalysisParser(list):
     SUPPORTED_KEYS = [
@@ -648,6 +660,12 @@ class EngineControls:
         self.engine.send_command("boardsize {}".format(board.board_size))
         self.engine.send_command("komi {}".format(board.komi))
 
+        cfg_rule = self.parent.config.get("board")["rule"].lower()
+        if cfg_rule in ["japanese", "territory", "jp"]:
+            self.engine.send_command("sayuri-setoption name scoring rule value {}".format("territory"))
+        elif cfg_rule in ["chinese", "area", "cn"]:
+            self.engine.send_command("sayuri-setoption name scoring rule value {}".format("area"))
+
         leaf_tag = self.parent.tree.get_tag()
         curr = self.parent.tree.root
         while leaf_tag != curr.get_tag():
@@ -754,11 +772,13 @@ class GameAnalysisWidget(BoxLayout, BackgroundColor, Screen):
 
     def sync_config(self):
         self.show_bar.elem_label.text = self.config.get("engine")["show"]
+        self.pv_bar.elem_label.text = str(self.config.get("engine")["pv"])
         self.ownership_bar.elem_label.text = str(self.config.get("engine")["use_ownership"])
         self.move_ownership_bar.elem_label.text = str(self.config.get("engine")["use_movesownership"])
 
         all_bars = [
             self.show_bar,
+            self.pv_bar,
             self.ownership_bar,
             self.move_ownership_bar
         ]
@@ -771,13 +791,13 @@ class GameAnalysisWidget(BoxLayout, BackgroundColor, Screen):
             bar.elem_label.text = bar.elemset[elemidx]
             bar.elemidx = elemidx
 
-
     def back_only(self):
         self.manager.transition.direction = "left"
         self.manager.current = "game"
 
     def confirm_and_back(self):
         self.config.get("engine")["show"] = self.show_bar.elem_label.text
+        self.config.get("engine")["pv"] = self._text_to_bool(self.pv_bar.elem_label.text)
         self.config.get("engine")["use_ownership"] = \
             self._text_to_bool(self.ownership_bar.elem_label.text)
         self.config.get("engine")["use_movesownership"] = \
@@ -798,6 +818,12 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
         self.board_size_bar.value_label.text = str(self.config.get("board")["size"])
         self.komi_bar.value_label.text = str(self.config.get("board")["komi"])
 
+        cfg_rule = self.config.get("board")["rule"].lower()
+        if cfg_rule in ["japanese", "territory", "jp"]:
+            self.rule_bar.elem_label.text = "JP"
+        elif cfg_rule in ["chinese", "area", "cn"]:
+            self.rule_bar.elem_label.text = "CN"
+
         all_bars = [
             self.rule_bar
         ]
@@ -817,8 +843,13 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
     def confirm_and_back(self):
         self.config.get("board")["size"] = int(self.board_size_bar.value_label.text)
         self.config.get("board")["komi"] = float(self.komi_bar.value_label.text)
+        self.config.get("board")["rule"] = self.rule_bar.elem_label.text 
         self.manager.get_screen("game").sync_config()
         self.back_only()
+
+    def _get_rule(self):
+        cfg_rule = self.config.get("board")["rule"]
+
 
 class GameIOWidget(BoxLayout, BackgroundColor, Screen):
     def __init__(self, **kwargs):
