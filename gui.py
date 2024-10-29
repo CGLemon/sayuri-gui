@@ -19,6 +19,7 @@ import math, colorsys
 from tree import Tree, NodeKey
 from board import Board
 from gtp import GtpEngine, GtpColor, GtpVertex
+from theme import Theme
 import threading, queue
 import sys
 
@@ -173,19 +174,19 @@ class BoardPanelWidget(Widget):
             # board rectangle
             square_size = min(self.width, self.height)
             rect_pos = (self.center_x - square_size/2, self.center_y - square_size/2)
-            Color(*self.config.get("ui")["board_color"])
+            Color(*Theme.BOARD_COLOR.get())
             board_rect = Rectangle(pos=rect_pos, size=(square_size, square_size))
 
             # grid lines
-            margin = self.config.get("ui")["board_margin"]
+            margin = Theme.BOARD_MARGIN
             self.grid_size = board_rect.size[0] / (board_size - 1 + 1.5 * margin)
-            self.stone_size = self.grid_size * self.config.get("ui")["stone_size"]
+            self.stone_size = self.grid_size * Theme.STONE_SIZE
             self.gridpos = [math.floor((margin + i) * self.grid_size + 0.5) for i in range(board_size)]
             self.gridpos_x = [v + board_rect.pos[0] for v in self.gridpos]
             self.gridpos_y = [v + board_rect.pos[1] for v in self.gridpos]
 
-            line_color = self.config.get("ui")["line_color"]
-            Color(*line_color)
+            line_color = Theme.LINE_COLOR
+            Color(*line_color.get())
             lo_x, hi_x = self.gridpos_x[0], self.gridpos_x[-1]
             lo_y, hi_y = self.gridpos_y[0], self.gridpos_y[-1]
             for i in range(board_size):
@@ -193,11 +194,11 @@ class BoardPanelWidget(Widget):
                 Line(points=[(lo_x, self.gridpos_y[i]), (hi_x, self.gridpos_y[i])])
 
             # star points
-            star_scale = (self.grid_size/self.stone_size) * self.config.get("ui")["starpoint_size"]
+            star_scale = (self.grid_size/self.stone_size) * Theme.STARPOINT_SIZE
             for x, y in [ (idx % board_size, idx // board_size) for idx in range(board_size * board_size)]:
                 if self.board.is_star((x,y)):
                     self.draw_circle(
-                        x, y, line_color, scale=star_scale)
+                        x, y, line_color.get(), scale=star_scale)
 
             # coordinates
             lo = self.gridpos[0]
@@ -246,10 +247,10 @@ class BoardPanelWidget(Widget):
         self.canvas.clear()
         with self.canvas:
             # stones on board
-            stone_colors = self.config.get("ui")["stones"]
-            laststone_colors = self.config.get("ui")["laststones"]
-            outline_colors = self.config.get("ui").get("outline")
-            movesownership = self.config.get("engine")["use_movesownership"]
+            stone_colors = Theme.STONE_COLORS
+            laststone_colors = Theme.LAST_COLORS
+            outline_colors = Theme.OUTLINE_COLORS
+            ownership = self.config.get("engine")["use_ownership"]
             light_col = (0.99, 0.99, 0.99)
             stones_coord = board.get_stones_coord()
 
@@ -257,13 +258,13 @@ class BoardPanelWidget(Widget):
                 inner = laststone_colors[color] if board.is_last_move((x,y)) else None
                 self.draw_circle(
                     x, y,
-                    stone_colors[color],
-                    outline_color=outline_colors[color])
+                    stone_colors[color].get(),
+                    outline_color=outline_colors[color].get())
                 if inner:
                     self.draw_circle(
-                        x, y, inner, scale=0.35)
+                        x, y, inner.get(), scale=0.35)
             if show_pv_board:
-                if movesownership and main_info.get("movesownership"):
+                if ownership and main_info.get("movesownership"):
                     self.draw_ownermap(main_info["movesownership"])
                 unique_pv_buf = set()
                 for idx, vtx in reversed(list(enumerate(pv_list))):
@@ -278,7 +279,7 @@ class BoardPanelWidget(Widget):
                         draw_text(
                             pos=(self.gridpos_x[x], self.gridpos_y[y]),
                             text="{}".format(idx+1),
-                            color=stone_colors[col],
+                            color=stone_colors[col].get(),
                             font_size=self.grid_size / 2.5,
                             halign="center")
 
@@ -290,18 +291,18 @@ class BoardPanelWidget(Widget):
     def draw_auxiliary_contents(self):
         board = self.tree.get_val()["board"]
         to_move = board.to_move
-        stone_colors = self.config.get("ui")["stones"]
-        outline_colors = self.config.get("ui").get("outline")
+        stone_colors = Theme.STONE_COLORS
+        outline_colors = Theme.OUTLINE_COLORS
 
         # hover next move ghost stone
-        ghost_alpha = self.config.get("ui")["ghost_alpha"]
+        ghost_alpha = Theme.GHOST_ALPHA
         if self.ghost_stone:
             self.draw_circle(
                 *self.ghost_stone,
-                (*stone_colors[to_move], ghost_alpha))
+                stone_colors[to_move].bind_alpha(ghost_alpha).get())
 
         # children of current moves in undo / review
-        undo_colors = self.config.get("ui")["undo_colors"]
+        undo_colors = Theme.UNDO_COLORS
         children_keys = self.tree.get_children_keys()
         for k in children_keys:
             col, vtx = k.unpack()
@@ -310,7 +311,7 @@ class BoardPanelWidget(Widget):
             x, y = board.vertex_to_xy(vtx)
             self.draw_circle(
                 x, y,
-                outline_color=undo_colors[col])
+                outline_color=undo_colors[col].get())
 
         if board.num_passes >= 2:
             # final positions
@@ -318,14 +319,14 @@ class BoardPanelWidget(Widget):
             for col, x, y in get_deadstones_coord:
                 self.draw_circle(
                     x, y,
-                    (*stone_colors[col], ghost_alpha),
-                    outline_color=outline_colors[col])
+                    stone_colors[col].bind_alpha(ghost_alpha).get(),
+                    outline_color=outline_colors[col].get())
 
             finalpos_coord = board.get_finalpos_coord()
             for col, x, y in finalpos_coord:
                 if col == Board.EMPTY:
                     continue
-                self.draw_influence(x, y, (*stone_colors[col], 0.65), 0.55)
+                self.draw_influence(x, y, stone_colors[col].bind_alpha(0.65).get(), 0.55)
 
     def draw_analysis_contents(self):
         board = self.tree.get_val()["board"]
@@ -335,7 +336,6 @@ class BoardPanelWidget(Widget):
         forbidmap = list()
 
         if board.num_passes < 2 and analysis:
-            # analysis verbose
             best_color = (0.3, 0.85, 0.85)
             norm_color = (0.1, 0.75, 0.1)
             analysis.sort(key=lambda x:x["order"], reverse=True)
@@ -357,6 +357,7 @@ class BoardPanelWidget(Widget):
                 self.draw_circle(x, y, (*eval_color, alpha))
 
                 if alpha > 0.25:
+                    # draw analysis text on the candidate circle
                     show_lines = 0
                     text_str = str()
                     for show_mode in show.split("+"):
@@ -398,6 +399,7 @@ class BoardPanelWidget(Widget):
                         halign="center")
                     forbidmap.append((x,y))
                 else:
+                    # fade candidate circle and draw aura
                     self.draw_circle(
                         x, y,
                         outline_color=(0.5, 0.5, 0.5, alpha),
@@ -409,7 +411,7 @@ class BoardPanelWidget(Widget):
 
     def draw_ownermap(self, ownermap, forbidmap=[]):
         board = self.tree.get_val()["board"]
-        stone_colors = self.config.get("ui")["stones"]
+        stone_colors = Theme.STONE_COLORS
         board_size = board.board_size
         to_move = board.to_move
 
@@ -423,7 +425,10 @@ class BoardPanelWidget(Widget):
                 influ_size = influ_factor * 0.55 + (1.0 - influ_factor) * 0.25
 
                 if not (x, y) in forbidmap:
-                    self.draw_influence(x, y, (*stone_colors[col], influ_alpha), influ_size)
+                    self.draw_influence(
+                        x, y,
+                        stone_colors[col].bind_alpha(influ_alpha).get(),
+                        influ_size)
                 rowmajor_idx += 1
 
     def _find_closest(self, pos):
@@ -625,7 +630,7 @@ class EngineControls:
 
         self.engine = None
         try:
-            if engine_setting.get("command"):
+            if engine_setting.get("load") and engine_setting.get("command"):
                 self.engine = GtpEngine(DefaultConfig.get("engine")["command"])
         except Exception:
             self.engine = None
@@ -690,7 +695,7 @@ class EngineControls:
         elif action["action"] == "analyze":
             col = action["color"]
             ownership = self.parent.config.get("engine")["use_ownership"]
-            movesownership = self.parent.config.get("engine")["use_movesownership"]
+            movesownership = ownership
             self.engine.send_command(
                 "sayuri-analyze {} {} ownership {} movesownership {}".format(
                 col, 50, ownership, movesownership))
@@ -774,13 +779,11 @@ class GameAnalysisWidget(BoxLayout, BackgroundColor, Screen):
         self.show_bar.elem_label.text = self.config.get("engine")["show"]
         self.pv_bar.elem_label.text = str(self.config.get("engine")["pv"])
         self.ownership_bar.elem_label.text = str(self.config.get("engine")["use_ownership"])
-        self.move_ownership_bar.elem_label.text = str(self.config.get("engine")["use_movesownership"])
 
         all_bars = [
             self.show_bar,
             self.pv_bar,
-            self.ownership_bar,
-            self.move_ownership_bar
+            self.ownership_bar
         ]
         for bar in all_bars:
             elemidx = 0
@@ -800,8 +803,6 @@ class GameAnalysisWidget(BoxLayout, BackgroundColor, Screen):
         self.config.get("engine")["pv"] = self._text_to_bool(self.pv_bar.elem_label.text)
         self.config.get("engine")["use_ownership"] = \
             self._text_to_bool(self.ownership_bar.elem_label.text)
-        self.config.get("engine")["use_movesownership"] = \
-            self._text_to_bool(self.move_ownership_bar.elem_label.text)
         self.manager.get_screen("game").engine.do_action(
             { "action" : "stop-analyze" }
         )

@@ -1,28 +1,16 @@
 {
-  "engine" : {
-     "command": "./engine/sayuri -w ./engine/zero-swa-1140k.bin.txt --use-optimistic-policy -t 4",
-     "show": "W+V",
-     "pv": true,
-     "use_ownership": false, 
-     "use_movesownership": false
-   },
-  "board": {
-    "size": 19,
-    "komi": 6.5,
-    "rule": "japanese",
-    "maxsize": 19,
-    "minsize": 2
-  },
-  "ui": {
-    "stones": [ [0.1, 0.1, 0.1], [0.9, 0.9, 0.9] ],
-    "laststones": [ [0.95, 0.45, 0.55], [0.95, 0.45, 0.55] ],
-    "outline": [ [0.25, 0.25, 0.25, 0.5],  [0.5, 0.5, 0.5, 0.5] ],
-    "ghost_alpha": 0.5,
-    "undo_colors" : [ [0.25, 0.25, 0.25, 0.625], [0.9, 0.9, 0.9, 0.5] ],
-    "board_margin": 1.5,
-    "starpoint_size": 0.1,
-    "stone_size": 0.45,
-    "board_color": [0.85, 0.68, 0.40],
-    "line_color": [0,0,0]
-  }
+    "engine" : {
+        "command": "./engine/sayuri -w ./engine/zero-swa-1140k.bin.txt --use-optimistic-policy -t 4",
+        "load": false,
+        "show": "W+V",
+        "pv": true,
+        "use_ownership": false
+     },
+    "board": {
+        "size": 19,
+        "komi": 6.5,
+        "rule": "japanese",
+        "maxsize": 19,
+        "minsize": 2
+    }
 }
