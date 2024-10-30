@@ -1,6 +1,9 @@
 {
     "engine" : {
-        "command": "./engine/sayuri -w ./engine/zero-swa-1140k.bin.txt --use-optimistic-policy -t 4",
+        "path": "./engine/sayuri",
+        "weights": "./engine/zero-swa-1140k.bin.txt",
+        "threads": 4,
+        "use_optimistic": true,
         "load": false,
         "show": "W+V",
         "pv": true,

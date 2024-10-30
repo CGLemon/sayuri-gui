@@ -46,6 +46,14 @@
     halign: 'center'
     valign: 'middle'
 
+<TextLabel@Label+BackgroundColor>:
+    background_color: 0.95, 0.95, 0.95, 1
+    color: 0, 0, 0, 1
+    font_size: 24
+    text_size: self.size[0] - 15, self.size[1] - 2
+    halign: 'left'
+    valign: 'top'
+
 <BoardPanelWidget>:
     config: app.config
     manager: app.manager
@@ -145,7 +153,7 @@
             size: self.texture_size
         Label:
             size_hint: 1, 0.025
-        StyledLabel:
+        TextLabel:
             id: infobox
         Label:
             size_hint: 1, 0.025
@@ -295,7 +303,7 @@
         ElementSelectBar:
             id: show_bar
             size_hint: 1, 0.1
-            elemset: ["W+V", "S+V", "W+V+S", "P", "R"]
+            elemset: ["W+V", "S+V", "W+V+S", "P", "R", "NA"]
             itemtext: "Show"
             itemcolor: 0.95, 0.95, 0.95, 1
             itembold: True

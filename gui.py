@@ -343,6 +343,8 @@ class BoardPanelWidget(Widget):
             max_visits = max(info["visits"] for info in analysis)
 
             for info in analysis:
+                if show == "NA":
+                    break
                 if not info["move"].is_move():
                     continue
                 x, y = info["move"].get()
@@ -522,12 +524,12 @@ class InfoPanelWidget(BoxLayout, BackgroundColor):
         self.event = Clock.schedule_interval(self.update_info, 0.1)
 
     def update_info(self, *args):
-        self.infobox.text = ""
         if self.board.num_passes >= 2:
             scores = [0] * 4
             finalpos_coord = self.board.get_finalpos_coord()
             for col, _, _ in finalpos_coord:
                 scores[col] += 1
+            self.infobox.text = str()
             self.infobox.text += "Black Score: {:.1f}".format(scores[Board.BLACK] - self.board.komi)
             self.infobox.text += "\nWhite Score: {:.1f}".format(scores[Board.WHITE])
 
@@ -626,12 +628,11 @@ class AnalysisParser(list):
 class EngineControls:
     def __init__(self, parent):
         self.parent = parent
-        engine_setting = DefaultConfig.get("engine")
-
         self.engine = None
+        command = self._get_command()
         try:
-            if engine_setting.get("load") and engine_setting.get("command"):
-                self.engine = GtpEngine(DefaultConfig.get("engine")["command"])
+            if not command is None:
+                self.engine = GtpEngine(command)
         except Exception:
             self.engine = None
         self._check_engine()
@@ -642,6 +643,25 @@ class EngineControls:
 
     def _bind(self):
         Window.bind(on_request_close=self.on_request_close)
+
+    def _get_command(self):
+        engine_setting = DefaultConfig.get("engine")
+
+        path = engine_setting.get("path", "")
+        weights = engine_setting.get("weights", "")
+        threads = engine_setting.get("threads", 1)
+        if not engine_setting.get("load") or \
+               len(path) == 0 or \
+               len(weights) == 0:
+            return None
+
+        cmd = str()
+        cmd += "{}".format(path)
+        cmd += " -w {}".format(weights)
+        cmd += " -t {}".format(threads)
+        if engine_setting.get("use_optimistic", True):
+            cmd += " --use-optimistic-policy"
+        return cmd
 
     def _check_engine(self):
         if not self.engine:
