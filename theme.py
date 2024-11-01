@@ -62,3 +62,4 @@ class Theme:
     STONE_SIZE = 0.45
     BOARD_COLOR = ColorCode([0.85, 0.68, 0.40])
     LINE_COLOR = ColorCode([0, 0, 0])
+    FONT_SIZE = 18

@@ -49,8 +49,8 @@
 <TextLabel@Label+BackgroundColor>:
     background_color: 0.95, 0.95, 0.95, 1
     color: 0, 0, 0, 1
-    font_size: 24
-    text_size: self.size[0] - 15, self.size[1] - 2
+    font_size: Theme.FONT_SIZE
+    text_size: self.size[0] - cm(1), self.size[1] - cm(1)
     halign: 'left'
     valign: 'top'
 
@@ -155,42 +155,55 @@
             size_hint: 1, 0.025
         TextLabel:
             id: infobox
+            text:"Hello"
         Label:
             size_hint: 1, 0.025
     Label:
         size_hint: 0.05, 1
 
 <GamePanelWidget>:
-    orientation: "horizontal"
+    orientation: "vertical"
     background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
     board_panel: board_panel
     config: app.config
 
+
+    MenuPanelWidget:
+        size_hint: 1, 0.05
     BoxLayout:
-        orientation: "vertical"
-        size_hint: 0.75, 1
-        MenuPanelWidget:
-            size_hint: 1, 0.05
+        orientation: "horizontal"
+        size_hint: 1, 0.9
+        Label:
+            size_hint: 0.02, 1
         BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 0.9
+            orientation: "vertical"
+            size_hint: 0.2, 1
             Label:
-                size_hint: 0.05, 1
-            BoardPanelWidget:
-                id: board_panel
-                size_hint: 0.9, 1
+                size_hint: 1, 0.05
+            InfoPanelWidget:
+                size_hint: 1, 0.4
                 board: root.board
                 tree: root.tree
                 engine: root.engine
             Label:
-                size_hint: 0.05, 1
-        ControlsPanelWidget:
-            size_hint: 1, 0.05
+                size_hint: 1, 0.55
+        Label:
+            size_hint: 0.02, 1
+        BoardPanelWidget:
+            id: board_panel
+            size_hint: 0.6, 1
             board: root.board
             tree: root.tree
             engine: root.engine
-    InfoPanelWidget:
-        size_hint: 0.25, 1
+        Label:
+            size_hint: 0.02, 1
+        BoxLayout:
+            orientation: "vertical"
+            size_hint: 0.2, 1
+        Label:
+            size_hint: 0.02, 1
+    ControlsPanelWidget:
+        size_hint: 1, 0.05
         board: root.board
         tree: root.tree
         engine: root.engine

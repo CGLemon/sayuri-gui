@@ -521,17 +521,6 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
 class InfoPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(InfoPanelWidget, self).__init__(**kwargs)
-        self.event = Clock.schedule_interval(self.update_info, 0.1)
-
-    def update_info(self, *args):
-        if self.board.num_passes >= 2:
-            scores = [0] * 4
-            finalpos_coord = self.board.get_finalpos_coord()
-            for col, _, _ in finalpos_coord:
-                scores[col] += 1
-            self.infobox.text = str()
-            self.infobox.text += "Black Score: {:.1f}".format(scores[Board.BLACK] - self.board.komi)
-            self.infobox.text += "\nWhite Score: {:.1f}".format(scores[Board.WHITE])
 
 class AnalysisParser(list):
     SUPPORTED_KEYS = [
