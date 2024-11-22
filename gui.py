@@ -521,6 +521,40 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
 class InfoPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(InfoPanelWidget, self).__init__(**kwargs)
+        self.event = Clock.schedule_interval(self.update_info, 0.1)
+
+    def update_info(self, *args):
+        if self.board.num_passes >= 2:
+            territory, stones, prisoners = self.board.get_finalscore_statistics()
+            komi = self.board.komi
+
+            cfg_rule = self.config.get("board")["rule"].lower()
+            scores = [0, 0]
+            if cfg_rule in ["japanese", "territory", "jp"]:
+                scores = [
+                    territory[Board.BLACK] + prisoners[Board.BLACK] - komi,
+                    territory[Board.WHITE] + prisoners[Board.WHITE]
+                ]
+            elif cfg_rule in ["chinese", "area", "cn"]:
+                scores = [
+                    territory[Board.BLACK] + stones[Board.BLACK] - komi,
+                    territory[Board.WHITE] + stones[Board.WHITE]
+                ]
+            text = str()
+            text += "Black has {:.1f} points.\n".format(scores[Board.BLACK])
+            text += "White has {:.1f} points.\n".format(scores[Board.WHITE])
+
+            diff = scores[Board.BLACK] - scores[Board.WHITE]
+            if abs(diff) < 0.1:
+                text += "The result is draw."
+            elif diff > 0.0:
+                text += "The result is B+{}".format(diff)
+            elif diff < 0.0:
+                text += "The result is W+{}".format(-diff)
+
+            self.infobox.text = text
+        else:
+            self.infobox.text = "Hello, I am Lemon!"
 
 class AnalysisParser(list):
     SUPPORTED_KEYS = [

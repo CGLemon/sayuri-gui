@@ -65,10 +65,10 @@
 
     StyledActionButton:
         icon: "img/menu-burger.png"
-        size_hint: 0.1, 1
+        size_hint: 0.075, 1
         on_release: root.switch_to_gameio()
     Label:
-        size_hint: 0.9, 1
+        size_hint: 0.925, 1
 
 <ControlsPanelWidget>:
     orientation: "vertical"
@@ -139,6 +139,8 @@
     orientation: "horizontal"
     background_color: 0.15, 0.3, 0.4, 1
     infobox: infobox
+    config: app.config
+    source: "img/lemon.png"
 
     Label:
         size_hint: 0.05, 1
@@ -148,16 +150,16 @@
         Label:
             size_hint: 1, 0.05
         Image:
-            size_hint: 1, 0.2
-            source: "img/lemon.png"
+            size_hint: 1, 0.45
+            source: root.source
             size: self.texture_size
         Label:
-            size_hint: 1, 0.025
+            size_hint: 1, 0.05
         TextLabel:
             id: infobox
-            text:"Hello"
+            text:"Hello, I am Lemon!"
         Label:
-            size_hint: 1, 0.025
+            size_hint: 1, 0.05
     Label:
         size_hint: 0.05, 1
 
@@ -166,7 +168,6 @@
     background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
     board_panel: board_panel
     config: app.config
-
 
     MenuPanelWidget:
         size_hint: 1, 0.05
@@ -181,12 +182,13 @@
             Label:
                 size_hint: 1, 0.05
             InfoPanelWidget:
-                size_hint: 1, 0.4
+                size_hint: 1, 0.55
                 board: root.board
                 tree: root.tree
                 engine: root.engine
+                source: "img/lemon.png"
             Label:
-                size_hint: 1, 0.55
+                size_hint: 1, 0.4
         Label:
             size_hint: 0.02, 1
         BoardPanelWidget:

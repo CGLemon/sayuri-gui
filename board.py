@@ -9,6 +9,9 @@ class Board:
     EMPTY = 2
     INVLD = 3
 
+    AREA = 0
+    TERRITORY = 1
+
     PASS_VERTEX = 100 * 100
     RESIGN_VERTEX = 100 * 100 + 1
     NULL_VERTEX = 100 * 100 + 2
@@ -213,6 +216,32 @@ class Board:
                 x, y = self.vertex_to_xy(vtx)
                 finalpos_coord.append((color, x, y))
         return finalpos_coord
+
+    def get_finalscore_statistics(self):
+        deadstones_coord = self.get_deadstones_coord()
+        finalpos_coord = self.get_finalpos_coord()
+
+        prisoners = self.prisoners[:]
+        for color, _, _ in deadstones_coord:
+            if color in [self.BLACK, self.WHITE]:
+                prisoners[self.get_invert_color(color)] += 1
+
+        stones = [0, 0]
+        territory = [0, 0]
+        for color, x, y in finalpos_coord:
+            if not color in [self.BLACK, self.WHITE]:
+                continue
+            is_stone = False
+            stone = self.get_stone((x, y))
+
+            if stone in [self.BLACK, self.WHITE]:
+                if stone == color:
+                    is_stone = True
+            if is_stone:
+                stones[color] += 1
+            else:
+                territory[color] += 1
+        return territory, stones, prisoners
 
     def _update_board(self, vtx):
         self.state[vtx] = self.to_move
