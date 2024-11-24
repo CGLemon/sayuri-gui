@@ -222,22 +222,23 @@ class Board:
         finalpos_coord = self.get_finalpos_coord()
 
         prisoners = self.prisoners[:]
-        for color, _, _ in deadstones_coord:
+        deadstones_buf = list()
+        for color, x, y in deadstones_coord:
             if color in [self.BLACK, self.WHITE]:
                 prisoners[self.get_invert_color(color)] += 1
+                deadstones_buf.append((x, y))
 
         stones = [0, 0]
         territory = [0, 0]
         for color, x, y in finalpos_coord:
             if not color in [self.BLACK, self.WHITE]:
                 continue
-            is_stone = False
             stone = self.get_stone((x, y))
 
-            if stone in [self.BLACK, self.WHITE]:
-                if stone == color:
-                    is_stone = True
-            if is_stone:
+            if not (x, y) in deadstones_buf and \
+                   stone in [self.BLACK, self.WHITE] and \
+                   stone == color:
+                # it is stone on the board
                 stones[color] += 1
             else:
                 territory[color] += 1

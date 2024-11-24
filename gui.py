@@ -530,17 +530,21 @@ class InfoPanelWidget(BoxLayout, BackgroundColor):
 
             cfg_rule = self.config.get("board")["rule"].lower()
             scores = [0, 0]
+            scoring_rule = "area"
             if cfg_rule in ["japanese", "territory", "jp"]:
                 scores = [
                     territory[Board.BLACK] + prisoners[Board.BLACK] - komi,
                     territory[Board.WHITE] + prisoners[Board.WHITE]
                 ]
+                scoring_rule = "territory"
             elif cfg_rule in ["chinese", "area", "cn"]:
                 scores = [
                     territory[Board.BLACK] + stones[Board.BLACK] - komi,
                     territory[Board.WHITE] + stones[Board.WHITE]
                 ]
+                scoring_rule = "area"
             text = str()
+            text += "Using {} scoring.\n".format(scoring_rule)
             text += "Black has {:.1f} points.\n".format(scores[Board.BLACK])
             text += "White has {:.1f} points.\n".format(scores[Board.WHITE])
 
