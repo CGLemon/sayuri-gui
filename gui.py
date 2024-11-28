@@ -70,6 +70,8 @@ class BoardPanelWidget(Widget):
                 self.tree.update_tag()
 
     def on_touch_down(self, touch):
+        if self.should_lock_board():
+            return
         if "button" in touch.profile and touch.button == "right":
             self.forbid_pv = True
             if self.pv_start_pos:
@@ -105,6 +107,8 @@ class BoardPanelWidget(Widget):
         return self.on_touch_down(touch)
 
     def on_touch_up(self, touch):
+        if self.should_lock_board():
+            return
         if "button" in touch.profile and touch.button == "right":
             self.forbid_pv = False
             if self.pv_start_pos:
@@ -118,14 +122,15 @@ class BoardPanelWidget(Widget):
                     to_move = self.board.to_move
                     col = self.board.get_gtp_color(to_move)
                     vtx = self.board.get_gtp_vertex((xp, yp))
-                    self.engine.do_action(
-                        { "action" : "play", "color" : col, "vertex" : vtx }
-                    )
-                    self.board.play((xp, yp))
-                    self.tree.add_and_forward(
-                        NodeKey(to_move, self.board.last_move),
-                        { "board" : self.board.copy() }
-                    )
+                    self.handle_move(col, vtx)
+                    # self.engine.do_action(
+                    #     { "action" : "play", "color" : col, "vertex" : vtx }
+                    # )
+                    # self.board.play((xp, yp))
+                    # self.tree.add_and_forward(
+                    #     NodeKey(to_move, self.board.last_move),
+                    #     { "board" : self.board.copy() }
+                    # )
                     self.ghost_stone = None
             if self.board.num_passes >= 2:
                 xd, xp, yd, yp = self._find_closest(touch.pos)
@@ -137,6 +142,44 @@ class BoardPanelWidget(Widget):
     def on_size(self, *args):
         self.draw_board()
         self.last_board_content_tag = None
+
+    def should_lock_board(self):
+        to_move = self.board.to_move
+        if (self.config.get("game")["black"] in ["ai", "comp"] and to_move == Board.BLACK) or \
+               (self.config.get("game")["white"] in ["ai", "comp"] and to_move == Board.WHITE):
+            return True
+        return False
+
+    def handle_move(self, col, vtx):
+        self.engine.do_action(
+            { "action" : "play", "color" : col, "vertex" : vtx }
+        )
+        to_move = Board.BLACK if col.is_black else Board.WHITE
+
+        if vtx.is_pass():
+            self.board.play(Board.PASS_VERTEX)
+            self.tree.add_and_forward(
+                NodeKey(to_move, self.board.last_move),
+                { "board" : self.board.copy() }
+            )
+        else:
+            x, y = vtx.get()
+            self.board.play((x, y))
+            self.tree.add_and_forward(
+                NodeKey(to_move, self.board.last_move),
+                { "board" : self.board.copy() }
+            )
+
+    def handle_auto_move(self):
+        to_move = self.board.to_move
+        best_move, curr_visits = None, 0
+        if (self.config.get("game")["black"] in ["ai", "comp"] and to_move == Board.BLACK) or \
+               (self.config.get("game")["white"] in ["ai", "comp"] and to_move == Board.WHITE):
+            best_move = self.tree.get_val().get("move")
+            curr_visits = self.tree.get_val().get("visits")
+        if not best_move is None and curr_visits >= 400:
+            self.handle_move(self.board.get_gtp_color(to_move), best_move)
+
 
     def draw_circle(self, x, y, color=None, **kwargs):
         outline_color = kwargs.get("outline_color", None)
@@ -215,6 +258,8 @@ class BoardPanelWidget(Widget):
                     font_size=self.grid_size / 1.5)
 
     def draw_board_contents(self, *args):
+        self.handle_auto_move()
+
         curr_tag = self.tree.get_tag()
         if self.last_board_content_tag == curr_tag:
             return
@@ -338,14 +383,12 @@ class BoardPanelWidget(Widget):
         if board.num_passes < 2 and analysis:
             best_color = (0.3, 0.85, 0.85)
             norm_color = (0.1, 0.75, 0.1)
-            analysis.sort(key=lambda x:x["order"], reverse=True)
             tot_visits = sum(info["visits"] for info in analysis)
             max_visits = max(info["visits"] for info in analysis)
 
             for info in analysis:
-                if show == "NA":
-                    break
-                if not info["move"].is_move():
+                if show == "NA" or not info["move"].is_move():
+                    # we can only draw the move on the board
                     continue
                 x, y = info["move"].get()
                 visits = info["visits"]
@@ -528,9 +571,8 @@ class InfoPanelWidget(BoxLayout, BackgroundColor):
             territory, stones, prisoners = self.board.get_finalscore_statistics()
             komi = self.board.komi
 
-            cfg_rule = self.config.get("board")["rule"].lower()
+            scoring_rule = self.config.get("game")["rule"].lower()
             scores = [0, 0]
-            scoring_rule = "area"
             if cfg_rule in ["japanese", "territory", "jp"]:
                 scores = [
                     territory[Board.BLACK] + prisoners[Board.BLACK] - komi,
@@ -712,10 +754,10 @@ class EngineControls:
         self.engine.send_command("boardsize {}".format(board.board_size))
         self.engine.send_command("komi {}".format(board.komi))
 
-        cfg_rule = self.parent.config.get("board")["rule"].lower()
-        if cfg_rule in ["japanese", "territory", "jp"]:
+        scoring_rule = self.parent.config.get("game")["rule"].lower()
+        if scoring_rule in ["japanese", "territory", "jp"]:
             self.engine.send_command("sayuri-setoption name scoring rule value {}".format("territory"))
-        elif cfg_rule in ["chinese", "area", "cn"]:
+        elif scoring_rule in ["chinese", "area", "cn"]:
             self.engine.send_command("sayuri-setoption name scoring rule value {}".format("area"))
 
         leaf_tag = self.parent.tree.get_tag()
@@ -767,12 +809,17 @@ class EngineControls:
                 last_line = line
 
         if last_line and self.last_board_content_tag == self.parent.tree.get_tag():
-            self.parent.tree.get_val()["analysis"] = AnalysisParser(last_line["data"])
+            analysis = AnalysisParser(last_line["data"])
+            analysis.sort(key=lambda x:x["order"], reverse=True)
+
+            self.parent.tree.get_val()["move"] = analysis[0]["move"]
+            self.parent.tree.get_val()["visits"] = sum(info["visits"] for info in analysis)
+            self.parent.tree.get_val()["analysis"] = analysis
             self.parent.tree.update_tag()
-            if not self.parent.analyzing_mode:
+            if not self.parent.analysis_mode:
                 self.parent.engine.do_action({ "action" : "stop-analyze" })
         if not self.analyzing and \
-               self.parent.analyzing_mode and \
+               self.parent.analysis_mode and \
                not "analyze" in self.last_rep_command:
             col = self.parent.board.get_gtp_color(self.parent.board.to_move)
             self.parent.engine.do_action({ "action" : "analyze", "color" : col })
@@ -792,19 +839,19 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
     def __init__(self, **kwargs):
         super(GamePanelWidget, self).__init__(**kwargs)
         self.board = Board(
-            DefaultConfig.get("board")["size"],
-            DefaultConfig.get("board")["komi"]
+            DefaultConfig.get("game")["size"],
+            DefaultConfig.get("game")["komi"]
         )
         self.tree = Tree({ "board" : self.board.copy() })
 
         self.engine = EngineControls(self)
-        self.analyzing_mode = False
+        self.analysis_mode = False
         self._bind()
 
     def sync_config(self):
         self.board.reset(
-            self.config.get("board")["size"],
-            self.config.get("board")["komi"])
+            self.config.get("game")["size"],
+            self.config.get("game")["komi"])
         self.tree.reset({ "board" : self.board.copy() })
         self.engine.sync_engine_state()
         self.board_panel.draw_board()
@@ -815,7 +862,7 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
 
     def on_keyboard_down(self, keyboard, keycode, text, modifiers):
         if keycode[1] == "a" or keycode[1] == "spacebar":
-            self.analyzing_mode ^= True
+            self.analysis_mode ^= True
         return True
 
 class GameAnalysisWidget(BoxLayout, BackgroundColor, Screen):
@@ -863,13 +910,13 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
         super(GameSettingWidget, self).__init__(**kwargs)
 
     def sync_config(self):
-        self.board_size_bar.value_label.text = str(self.config.get("board")["size"])
-        self.komi_bar.value_label.text = str(self.config.get("board")["komi"])
+        self.board_size_bar.value_label.text = str(self.config.get("game")["size"])
+        self.komi_bar.value_label.text = str(self.config.get("game")["komi"])
 
-        cfg_rule = self.config.get("board")["rule"].lower()
-        if cfg_rule in ["japanese", "territory", "jp"]:
+        scoring_rule = self.config.get("game")["rule"].lower()
+        if scoring_rule in ["japanese", "territory", "jp"]:
             self.rule_bar.elem_label.text = "JP"
-        elif cfg_rule in ["chinese", "area", "cn"]:
+        elif scoring_rule in ["chinese", "area", "cn"]:
             self.rule_bar.elem_label.text = "CN"
 
         all_bars = [
@@ -889,15 +936,11 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
         self.manager.current = "game"
 
     def confirm_and_back(self):
-        self.config.get("board")["size"] = int(self.board_size_bar.value_label.text)
-        self.config.get("board")["komi"] = float(self.komi_bar.value_label.text)
-        self.config.get("board")["rule"] = self.rule_bar.elem_label.text 
+        self.config.get("game")["size"] = int(self.board_size_bar.value_label.text)
+        self.config.get("game")["komi"] = float(self.komi_bar.value_label.text)
+        self.config.get("game")["rule"] = self.rule_bar.elem_label.text 
         self.manager.get_screen("game").sync_config()
         self.back_only()
-
-    def _get_rule(self):
-        cfg_rule = self.config.get("board")["rule"]
-
 
 class GameIOWidget(BoxLayout, BackgroundColor, Screen):
     def __init__(self, **kwargs):

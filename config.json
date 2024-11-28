@@ -9,11 +9,13 @@
         "pv": true,
         "use_ownership": false
      },
-    "board": {
+    "game" : {
         "size": 19,
         "komi": 6.5,
         "rule": "japanese",
         "maxsize": 19,
-        "minsize": 2
+        "minsize": 2,
+        "black" : "player",
+        "white" : "player"
     }
 }

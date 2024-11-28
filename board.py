@@ -238,7 +238,6 @@ class Board:
             if not (x, y) in deadstones_buf and \
                    stone in [self.BLACK, self.WHITE] and \
                    stone == color:
-                # it is stone on the board
                 stones[color] += 1
             else:
                 territory[color] += 1
