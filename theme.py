@@ -22,7 +22,7 @@ class ColorCode:
     def _parse_tuple(self, code):
         for c in code:
             if isinstance(c, int):
-                if not (c >= 0 and c <= 255): 
+                if not (c >= 0 and c <= 255):
                     raise Exception("INT code must be in [0-255].")
                 self.code.append(c/255.0)
             if isinstance(c, float):

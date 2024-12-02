@@ -1,5 +1,5 @@
 import kivy
-from kivy.app import App 
+from kivy.app import App
 from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.screenmanager import ScreenManager, Screen
@@ -58,7 +58,7 @@ class BoardPanelWidget(Widget):
             if self.collide_point(*relative_pos):
                 analysis = self.tree.get_val().get("analysis")
                 xd, xp, yd, yp = self._find_closest(relative_pos)
-                
+
                 if analysis and max(yd, xd) < self.grid_size / 2:
                     for info in analysis:
                         if not info["move"].is_move():
@@ -70,7 +70,7 @@ class BoardPanelWidget(Widget):
                 self.tree.update_tag()
 
     def on_touch_down(self, touch):
-        if self.should_lock_board():
+        if self.game.should_lock_board():
             return
         if "button" in touch.profile and touch.button == "right":
             self.forbid_pv = True
@@ -107,7 +107,7 @@ class BoardPanelWidget(Widget):
         return self.on_touch_down(touch)
 
     def on_touch_up(self, touch):
-        if self.should_lock_board():
+        if self.game.should_lock_board():
             return
         if "button" in touch.profile and touch.button == "right":
             self.forbid_pv = False
@@ -122,15 +122,7 @@ class BoardPanelWidget(Widget):
                     to_move = self.board.to_move
                     col = self.board.get_gtp_color(to_move)
                     vtx = self.board.get_gtp_vertex((xp, yp))
-                    self.handle_move(col, vtx)
-                    # self.engine.do_action(
-                    #     { "action" : "play", "color" : col, "vertex" : vtx }
-                    # )
-                    # self.board.play((xp, yp))
-                    # self.tree.add_and_forward(
-                    #     NodeKey(to_move, self.board.last_move),
-                    #     { "board" : self.board.copy() }
-                    # )
+                    self.handle_play_move(col, vtx)
                     self.ghost_stone = None
             if self.board.num_passes >= 2:
                 xd, xp, yd, yp = self._find_closest(touch.pos)
@@ -143,18 +135,11 @@ class BoardPanelWidget(Widget):
         self.draw_board()
         self.last_board_content_tag = None
 
-    def should_lock_board(self):
-        to_move = self.board.to_move
-        if (self.config.get("game")["black"] in ["ai", "comp"] and to_move == Board.BLACK) or \
-               (self.config.get("game")["white"] in ["ai", "comp"] and to_move == Board.WHITE):
-            return True
-        return False
-
-    def handle_move(self, col, vtx):
+    def handle_play_move(self, col, vtx):
         self.engine.do_action(
             { "action" : "play", "color" : col, "vertex" : vtx }
         )
-        to_move = Board.BLACK if col.is_black else Board.WHITE
+        to_move = Board.BLACK if col.is_black() else Board.WHITE
 
         if vtx.is_pass():
             self.board.play(Board.PASS_VERTEX)
@@ -178,8 +163,7 @@ class BoardPanelWidget(Widget):
             best_move = self.tree.get_val().get("move")
             curr_visits = self.tree.get_val().get("visits")
         if not best_move is None and curr_visits >= 400:
-            self.handle_move(self.board.get_gtp_color(to_move), best_move)
-
+            self.handle_play_move(self.board.get_gtp_color(to_move), best_move)
 
     def draw_circle(self, x, y, color=None, **kwargs):
         outline_color = kwargs.get("outline_color", None)
@@ -258,6 +242,7 @@ class BoardPanelWidget(Widget):
                     font_size=self.grid_size / 1.5)
 
     def draw_board_contents(self, *args):
+        # before drawing the board, we check the engine's move
         self.handle_auto_move()
 
         curr_tag = self.tree.get_tag()
@@ -266,14 +251,18 @@ class BoardPanelWidget(Widget):
         self.last_board_content_tag = curr_tag
         board = self.tree.get_val()["board"]
 
+        if hash(board) != hash(self.board):
+            return
+
         # synchronize PV board
-        pv = self.config.get("engine")["pv"]
+        forbid_pv = self.forbid_pv or \
+                        not self.config.get("engine")["pv"] or \
+                        self.game.should_forbid_display()
         analysis = self.tree.get_val().get("analysis")
-        show_pv_board = not self.forbid_pv and \
+        show_pv_board = not forbid_pv and \
                             not self.pv_start_pos is None and \
                             board.get_stone(self.pv_start_pos) == Board.EMPTY and \
-                            analysis is not None and \
-                            pv
+                            analysis is not None
         main_info = None
         if show_pv_board:
             board = board.copy()
@@ -308,6 +297,9 @@ class BoardPanelWidget(Widget):
                 if inner:
                     self.draw_circle(
                         x, y, inner.get(), scale=0.35)
+            if self.game.should_forbid_display():
+                # never draw any analysis or auxiliary elements
+                return
             if show_pv_board:
                 if ownership and main_info.get("movesownership"):
                     self.draw_ownermap(main_info["movesownership"])
@@ -327,9 +319,9 @@ class BoardPanelWidget(Widget):
                             color=stone_colors[col].get(),
                             font_size=self.grid_size / 2.5,
                             halign="center")
-
                 # only draw stones on the board if it is in pv mode
                 return
+
             self.draw_auxiliary_contents()
             self.draw_analysis_contents()
 
@@ -338,6 +330,9 @@ class BoardPanelWidget(Widget):
         to_move = board.to_move
         stone_colors = Theme.STONE_COLORS
         outline_colors = Theme.OUTLINE_COLORS
+
+        if hash(board) != hash(self.board):
+            return
 
         # hover next move ghost stone
         ghost_alpha = Theme.GHOST_ALPHA
@@ -380,6 +375,9 @@ class BoardPanelWidget(Widget):
         show = self.config.get("engine")["show"]
         forbidmap = list()
 
+        if hash(board) != hash(self.board):
+            return
+
         if board.num_passes < 2 and analysis:
             best_color = (0.3, 0.85, 0.85)
             norm_color = (0.1, 0.75, 0.1)
@@ -392,7 +390,7 @@ class BoardPanelWidget(Widget):
                     continue
                 x, y = info["move"].get()
                 visits = info["visits"]
-                visit_ratio = visits / max_visits 
+                visit_ratio = visits / max_visits
 
                 alpha_factor = math.pow(visit_ratio, 0.3)
                 alpha = alpha_factor * 0.75 + (1. - alpha_factor) * 0.1
@@ -508,6 +506,8 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
             self.pass_btn.text = "-"
 
     def play_pass(self):
+        if self.game.should_lock_board():
+            return
         if self.board.num_passes < 2 and \
                self.board.legal(Board.PASS_VERTEX):
             to_move = self.board.to_move
@@ -523,6 +523,8 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
             )
 
     def undo(self, t=1):
+        if self.game.should_lock_board():
+            return
         for _ in range(t):
             succ = self.tree.backward()
             if not succ:
@@ -531,6 +533,8 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
             self.engine.do_action({ "action" : "undo" })
 
     def redo(self, t=1):
+        if self.game.should_lock_board():
+            return
         for _ in range(t):
             succ = self.tree.forward()
             if not succ:
@@ -637,7 +641,7 @@ class AnalysisParser(list):
         tokens = list()
         while True:
             token = self._next_token()
-            if token == None: 
+            if token == None:
                 break
             if token in self.SUPPORTED_KEYS:
                 self._back()
@@ -810,7 +814,7 @@ class EngineControls:
 
         if last_line and self.last_board_content_tag == self.parent.tree.get_tag():
             analysis = AnalysisParser(last_line["data"])
-            analysis.sort(key=lambda x:x["order"], reverse=True)
+            analysis.sort(key=lambda x:x["order"], reverse=False)
 
             self.parent.tree.get_val()["move"] = analysis[0]["move"]
             self.parent.tree.get_val()["visits"] = sum(info["visits"] for info in analysis)
@@ -847,6 +851,15 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
         self.engine = EngineControls(self)
         self.analysis_mode = False
         self._bind()
+
+    def should_lock_board(self):
+        to_move = self.board.to_move
+        return (self.config.get("game")["black"] in ["ai", "comp"] and to_move == Board.BLACK) or \
+                   (self.config.get("game")["white"] in ["ai", "comp"] and to_move == Board.WHITE)
+
+    def should_forbid_display(self):
+        return self.config.get("game")["black"] in ["ai", "comp"] or \
+                   self.config.get("game")["white"] in ["ai", "comp"]
 
     def sync_config(self):
         self.board.reset(
@@ -938,7 +951,7 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
     def confirm_and_back(self):
         self.config.get("game")["size"] = int(self.board_size_bar.value_label.text)
         self.config.get("game")["komi"] = float(self.komi_bar.value_label.text)
-        self.config.get("game")["rule"] = self.rule_bar.elem_label.text 
+        self.config.get("game")["rule"] = self.rule_bar.elem_label.text
         self.manager.get_screen("game").sync_config()
         self.back_only()
 

@@ -321,6 +321,9 @@ class Board:
     def index_to_xy(self, idx):
         return idx % self.board_size, idx // self.board_size
 
+    def __hash__(self):
+        return hash(str(self))
+
     def __str__(self):
         def get_xlabel(bsize, x_labels):
             line_str = "  "
@@ -343,7 +346,6 @@ class Board:
                         x_str = " " + stone_str + " "
                 else:
                     x_str = " " + ("+" if self.is_star((x,y)) else ".") + " "
-                        
                 line_str += x_str
             line_str += str(y+1) if y >= 9 else " " + str(y+1)
             out += (line_str + "\n")
