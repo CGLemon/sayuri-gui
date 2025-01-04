@@ -70,8 +70,6 @@ class BoardPanelWidget(Widget):
                 self.tree.update_tag()
 
     def on_touch_down(self, touch):
-        if self.game.should_lock_board():
-            return
         if "button" in touch.profile and touch.button == "right":
             self.forbid_pv = True
             if self.pv_start_pos:
@@ -107,8 +105,6 @@ class BoardPanelWidget(Widget):
         return self.on_touch_down(touch)
 
     def on_touch_up(self, touch):
-        if self.game.should_lock_board():
-            return
         if "button" in touch.profile and touch.button == "right":
             self.forbid_pv = False
             if self.pv_start_pos:
@@ -154,16 +150,6 @@ class BoardPanelWidget(Widget):
                 NodeKey(to_move, self.board.last_move),
                 { "board" : self.board.copy() }
             )
-
-    def handle_auto_move(self):
-        to_move = self.board.to_move
-        best_move, curr_visits = None, 0
-        if (self.config.get("game")["black"] in ["ai", "comp"] and to_move == Board.BLACK) or \
-               (self.config.get("game")["white"] in ["ai", "comp"] and to_move == Board.WHITE):
-            best_move = self.tree.get_val().get("move")
-            curr_visits = self.tree.get_val().get("visits")
-        if not best_move is None and curr_visits >= 400:
-            self.handle_play_move(self.board.get_gtp_color(to_move), best_move)
 
     def draw_circle(self, x, y, color=None, **kwargs):
         outline_color = kwargs.get("outline_color", None)
@@ -242,9 +228,6 @@ class BoardPanelWidget(Widget):
                     font_size=self.grid_size / 1.5)
 
     def draw_board_contents(self, *args):
-        # before drawing the board, we check the engine's move
-        self.handle_auto_move()
-
         curr_tag = self.tree.get_tag()
         if self.last_board_content_tag == curr_tag:
             return
@@ -256,8 +239,7 @@ class BoardPanelWidget(Widget):
 
         # synchronize PV board
         forbid_pv = self.forbid_pv or \
-                        not self.config.get("engine")["pv"] or \
-                        self.game.should_forbid_display()
+                        not self.config.get("engine")["pv"]
         analysis = self.tree.get_val().get("analysis")
         show_pv_board = not forbid_pv and \
                             not self.pv_start_pos is None and \
@@ -297,9 +279,6 @@ class BoardPanelWidget(Widget):
                 if inner:
                     self.draw_circle(
                         x, y, inner.get(), scale=0.35)
-            if self.game.should_forbid_display():
-                # never draw any analysis or auxiliary elements
-                return
             if show_pv_board:
                 if ownership and main_info.get("movesownership"):
                     self.draw_ownermap(main_info["movesownership"])
@@ -506,8 +485,6 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
             self.pass_btn.text = "-"
 
     def play_pass(self):
-        if self.game.should_lock_board():
-            return
         if self.board.num_passes < 2 and \
                self.board.legal(Board.PASS_VERTEX):
             to_move = self.board.to_move
@@ -523,8 +500,6 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
             )
 
     def undo(self, t=1):
-        if self.game.should_lock_board():
-            return
         for _ in range(t):
             succ = self.tree.backward()
             if not succ:
@@ -533,8 +508,6 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
             self.engine.do_action({ "action" : "undo" })
 
     def redo(self, t=1):
-        if self.game.should_lock_board():
-            return
         for _ in range(t):
             succ = self.tree.forward()
             if not succ:
@@ -851,15 +824,6 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
         self.engine = EngineControls(self)
         self.analysis_mode = False
         self._bind()
-
-    def should_lock_board(self):
-        to_move = self.board.to_move
-        return (self.config.get("game")["black"] in ["ai", "comp"] and to_move == Board.BLACK) or \
-                   (self.config.get("game")["white"] in ["ai", "comp"] and to_move == Board.WHITE)
-
-    def should_forbid_display(self):
-        return self.config.get("game")["black"] in ["ai", "comp"] or \
-                   self.config.get("game")["white"] in ["ai", "comp"]
 
     def sync_config(self):
         self.board.reset(

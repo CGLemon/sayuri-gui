@@ -1,7 +1,7 @@
 {
     "engine" : {
         "path": "./engine/sayuri",
-        "weights": "./engine/zero-swa-1140k.bin.txt",
+        "weights": "./engine/network.bin.txt",
         "threads": 4,
         "use_optimistic": true,
         "load": false,
@@ -14,8 +14,6 @@
         "komi": 6.5,
         "rule": "japanese",
         "maxsize": 19,
-        "minsize": 2,
-        "black" : "player",
-        "white" : "player"
+        "minsize": 2
     }
 }
