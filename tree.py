@@ -8,8 +8,11 @@ class NodeKey:
     def unpack(self):
         return self.color, self.vertex
 
+    def __str__(self):
+        return "{}-{}".format(self.color, self.vertex)
+
     def __hash__(self):
-        ret = hash("col{}-vtx{}".format(self.color, self.vertex))
+        ret = hash(self.__str__())
         return ret
 
 class Node:

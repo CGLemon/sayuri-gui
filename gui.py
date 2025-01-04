@@ -18,9 +18,8 @@ import math, colorsys
 
 from tree import Tree, NodeKey
 from board import Board
-from gtp import GtpEngine, GtpColor, GtpVertex
+from gtp import GtpEngine, GtpVertex
 from theme import Theme
-import threading, queue
 import sys
 
 kivy.config.Config.set("input", "mouse", "mouse,multitouch_on_demand")
@@ -93,10 +92,8 @@ class BoardPanelWidget(Widget):
         if "button" in touch.profile and touch.button == "scrollup":
             succ = self.tree.forward()
             if succ:
+                col, vtx = self.tree.get_key().unpack()
                 self.board.copy_from(self.tree.get_val()["board"])
-                to_move, played_move = self.tree.get_key().unpack()
-                col = self.board.get_gtp_color(to_move)
-                vtx = self.board.get_gtp_vertex(self.board.last_move)
                 self.engine.do_action(
                     { "action" : "play", "color" : col, "vertex" : vtx }
                 )
@@ -135,21 +132,10 @@ class BoardPanelWidget(Widget):
         self.engine.do_action(
             { "action" : "play", "color" : col, "vertex" : vtx }
         )
-        to_move = Board.BLACK if col.is_black() else Board.WHITE
-
-        if vtx.is_pass():
-            self.board.play(Board.PASS_VERTEX)
-            self.tree.add_and_forward(
-                NodeKey(to_move, self.board.last_move),
-                { "board" : self.board.copy() }
-            )
-        else:
-            x, y = vtx.get()
-            self.board.play((x, y))
-            self.tree.add_and_forward(
-                NodeKey(to_move, self.board.last_move),
-                { "board" : self.board.copy() }
-            )
+        self.board.play(vtx, to_move=col)
+        self.tree.add_and_forward(
+            NodeKey(col, vtx), { "board" : self.board.copy() }
+        )
 
     def draw_circle(self, x, y, color=None, **kwargs):
         outline_color = kwargs.get("outline_color", None)
@@ -256,9 +242,11 @@ class BoardPanelWidget(Widget):
                     main_info = info
                     pv_list = info["pv"]
             for vtx in pv_list:
-                m = vtx.get() if vtx.is_move() else Board.PASS_VERTEX
-                if board.legal(m):
-                    board.play(m)
+                try:
+                    board.play(vtx)
+                except Exception:
+                    # not a legal move
+                    break
 
         self.canvas.clear()
         with self.canvas:
@@ -325,12 +313,12 @@ class BoardPanelWidget(Widget):
         children_keys = self.tree.get_children_keys()
         for k in children_keys:
             col, vtx = k.unpack()
-            if vtx == Board.PASS_VERTEX:
+            if not vtx.is_move():
                 continue
-            x, y = board.vertex_to_xy(vtx)
+            x, y = vtx.get()
             self.draw_circle(
                 x, y,
-                outline_color=undo_colors[col].get())
+                outline_color=undo_colors[0 if col.is_black() else 1].get())
 
         if board.num_passes >= 2:
             # final positions
@@ -487,16 +475,14 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
     def play_pass(self):
         if self.board.num_passes < 2 and \
                self.board.legal(Board.PASS_VERTEX):
-            to_move = self.board.to_move
-            col = self.board.get_gtp_color(to_move)
+            col = self.board.get_gtp_color(self.board.to_move)
             vtx = GtpVertex("pass")
             self.engine.do_action(
                 { "action" : "play", "color" : col, "vertex" : vtx }
             )
-            self.board.play(Board.PASS_VERTEX)
+            self.board.play(vtx, to_move=col)
             self.tree.add_and_forward(
-                NodeKey(to_move, self.board.last_move),
-                { "board" : self.board.copy() }
+                NodeKey(col, vtx), { "board" : self.board.copy() }
             )
 
     def undo(self, t=1):
@@ -512,11 +498,8 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
             succ = self.tree.forward()
             if not succ:
                 break
+            col, vtx = self.tree.get_key().unpack()
             self.board.copy_from(self.tree.get_val()["board"])
-
-            to_move, played_move = self.tree.get_key().unpack()
-            col = self.board.get_gtp_color(to_move)
-            vtx = self.board.get_gtp_vertex(self.board.last_move)
             self.engine.do_action(
                 { "action" : "play", "color" : col, "vertex" : vtx }
             )
@@ -741,9 +724,7 @@ class EngineControls:
         curr = self.parent.tree.root
         while leaf_tag != curr.get_tag():
             curr = curr.default
-            to_move, played_move = curr.get_key().unpack()
-            col = board.get_gtp_color(to_move)
-            vtx = board.get_gtp_vertex(played_move)
+            col, vtx = curr.get_key().unpack()
             self.do_action(
                 { "action" : "play", "color" : col, "vertex" : vtx }
             )

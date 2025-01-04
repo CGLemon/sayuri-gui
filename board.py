@@ -67,7 +67,8 @@ class Board:
         self.prisoners[:] = other.prisoners[:]
 
     def legal(self, vtx, to_move=None):
-        vtx = self._get_fancy_coord(vtx)
+        vtx = self._get_fancy_vertex(vtx)
+        to_move = self._get_fancy_color(to_move)
 
         if to_move is None:
             to_move = self.to_move
@@ -95,7 +96,8 @@ class Board:
         return len(our_surround) > 1
 
     def play(self, vtx, to_move=None):
-        vtx = self._get_fancy_coord(vtx)
+        vtx = self._get_fancy_vertex(vtx)
+        to_move = self._get_fancy_color(to_move)
 
         if not self.legal(vtx, to_move):
             raise Exception("Not a legal move.")
@@ -119,7 +121,7 @@ class Board:
         self.num_move += 1
 
     def mark_dead(self, vtx):
-        vtx = self._get_fancy_coord(vtx)
+        vtx = self._get_fancy_vertex(vtx)
         if not self.state[vtx] in [self.BLACK, self.WHITE]:
             return False
 
@@ -129,7 +131,7 @@ class Board:
         return True
 
     def is_star(self, vtx):
-        vtx = self._get_fancy_coord(vtx)
+        vtx = self._get_fancy_vertex(vtx)
         x = vtx % (self.board_size + 2) - 1
         y = vtx // (self.board_size + 2) - 1
         if self.board_size % 2 == 0 or self.board_size < 9:
@@ -150,13 +152,13 @@ class Board:
         return hits >= 2
 
     def is_last_move(self, vtx):
-        return self._get_fancy_coord(vtx) == self.last_move
+        return self._get_fancy_vertex(vtx) == self.last_move
 
     def get_invert_color(self, color):
         return self.invert_color_map[color]
 
     def get_stone(self, vtx):
-        return self.state[self._get_fancy_coord(vtx)]
+        return self.state[self._get_fancy_vertex(vtx)]
 
     def get_stones_coord(self):
         stones_coord = list()
@@ -287,19 +289,38 @@ class Board:
                     surround_vtx.add(svtx)
         return string_vtx, surround_vtx
 
-    def _get_fancy_coord(self, vtx):
+    def _get_fancy_color(self, color):
+        if color is None or \
+               isinstance(color, int):
+            return color
+        elif isinstance(color, GtpColor):
+            if color.is_black():
+                return self.BLACK
+            elif color.is_white():
+                return self.WHITE
+        raise Exception("Vertex coordinate should be int/GtpColor.")
+
+    def _get_fancy_vertex(self, vtx):
         if isinstance(vtx, int):
             return vtx
         elif isinstance(vtx, tuple) or isinstance(vtx, list):
             x, y = vtx
             return self.get_vertex(x, y)
-        raise Exception("Vertex coordinate should be int/tuple.")
+        elif isinstance(vtx, GtpVertex):
+            if vtx.is_pass():
+                return self.PASS_VERTEX
+            elif vtx.is_resign():
+                return self.RESIGN_VERTEX
+            else:
+                x, y = vtx.get()
+                return self.get_vertex(x, y)
+        raise Exception("Vertex coordinate should be int/tuple/GtpVertex.")
 
     def get_gtp_color(self, color):
-        return GtpColor(["b", "w"][color])
+        return GtpColor(["b", "w"][self._get_fancy_color(color)])
 
     def get_gtp_vertex(self, vtx):
-        vtx = self._get_fancy_coord(vtx)
+        vtx = self._get_fancy_vertex(vtx)
         if vtx == self.PASS_VERTEX:
             return GtpVertex(GtpVertex.PASS_VERTEX)
         elif vtx == self.RESIGN_VERTEX:
