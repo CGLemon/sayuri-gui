@@ -14,7 +14,7 @@ from kivy.clock import Clock
 
 from kivy.core.text import Label as CoreLabel
 from kivy.storage.jsonstore import JsonStore
-import math, colorsys
+import math
 
 from tree import Tree, NodeKey
 from board import Board
@@ -112,8 +112,7 @@ class BoardPanelWidget(Widget):
                 if self.board.num_passes < 2 and \
                        self.board.legal((xp, yp)) and \
                        max(yd, xd) < self.grid_size / 2:
-                    to_move = self.board.to_move
-                    col = self.board.get_gtp_color(to_move)
+                    col = self.board.get_gtp_color(self.board.to_move)
                     vtx = self.board.get_gtp_vertex((xp, yp))
                     self.handle_play_move(col, vtx)
                     self.ghost_stone = None
@@ -454,6 +453,7 @@ class MenuPanelWidget(BoxLayout, BackgroundColor):
     def switch_to_gameio(self):
         # self.manager.transition.direction = "right"
         # self.manager.current = "game-io"
+        # self.manager.get_screen("game-io").canvas.ask_update()
         pass
 
 class ControlsPanelWidget(BoxLayout, BackgroundColor):
@@ -507,12 +507,14 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
     def switch_to_gamesetting(self):
         self.manager.transition.direction = "right"
         self.manager.current = "game-setting"
-        self.manager.get_screen("game-setting").sync_config()
+        self.manager.get_screen(self.manager.current).sync_config()
+        self.manager.get_screen(self.manager.current).canvas.ask_update()
 
     def switch_to_gameanalysis(self):
         self.manager.transition.direction = "right"
         self.manager.current = "game-analysis"
-        self.manager.get_screen("game-analysis").sync_config()
+        self.manager.get_screen(self.manager.current).sync_config()
+        self.manager.get_screen(self.manager.current).canvas.ask_update()
 
     def reset_board(self):
         size = self.board.board_size
@@ -666,7 +668,8 @@ class EngineControls:
             self.engine = None
         self._check_engine()
 
-        self.event = Clock.schedule_interval(self.handel_engine_result, 0.05)
+        self.last_rep_command = str()
+        self.event = Clock.schedule_interval(self.handle_engine_result, 0.05)
         self.sync_engine_state()
         self._bind()
 
@@ -708,8 +711,6 @@ class EngineControls:
             return
         board = self.parent.board
         self.analyzing = False
-        self.last_board_content_tag = None
-        self.last_rep_command = None
         self.engine.send_command("clear_board")
         self.engine.send_command("boardsize {}".format(board.board_size))
         self.engine.send_command("komi {}".format(board.komi))
@@ -750,7 +751,7 @@ class EngineControls:
         elif action["action"] == "stop-analyze":
             self.engine.send_command("protocol_version")
 
-    def handel_engine_result(self, args):
+    def handle_engine_result(self, args):
         if not self.engine:
             return
 
@@ -766,7 +767,7 @@ class EngineControls:
             else:
                 last_line = line
 
-        if last_line and self.last_board_content_tag == self.parent.tree.get_tag():
+        if self.analyzing and last_line:
             analysis = AnalysisParser(last_line["data"])
             analysis.sort(key=lambda x:x["order"], reverse=False)
 
@@ -776,12 +777,12 @@ class EngineControls:
             self.parent.tree.update_tag()
             if not self.parent.analysis_mode:
                 self.parent.engine.do_action({ "action" : "stop-analyze" })
+
         if not self.analyzing and \
                self.parent.analysis_mode and \
                not "analyze" in self.last_rep_command:
             col = self.parent.board.get_gtp_color(self.parent.board.to_move)
             self.parent.engine.do_action({ "action" : "analyze", "color" : col })
-        self.last_board_content_tag = self.parent.tree.get_tag()
 
     def on_request_close(self, *args, source=None):
         if not self.engine:
@@ -849,6 +850,7 @@ class GameAnalysisWidget(BoxLayout, BackgroundColor, Screen):
     def back_only(self):
         self.manager.transition.direction = "left"
         self.manager.current = "game"
+        self.manager.get_screen(self.manager.current).canvas.ask_update()
 
     def confirm_and_back(self):
         self.config.get("engine")["show"] = self.show_bar.elem_label.text
@@ -892,6 +894,7 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
     def back_only(self):
         self.manager.transition.direction = "left"
         self.manager.current = "game"
+        self.manager.get_screen(self.manager.current).canvas.ask_update()
 
     def confirm_and_back(self):
         self.config.get("game")["size"] = int(self.board_size_bar.value_label.text)
@@ -907,6 +910,7 @@ class GameIOWidget(BoxLayout, BackgroundColor, Screen):
     def back_only(self):
         self.manager.transition.direction = "left"
         self.manager.current = "game"
+        self.manager.get_screen(self.manager.current).canvas.ask_update()
 
     def confirm_and_back(self):
         self.back_only()
