@@ -459,18 +459,54 @@ class MenuPanelWidget(BoxLayout, BackgroundColor):
 class ControlsPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(ControlsPanelWidget, self).__init__(**kwargs)
+        self.in_end_mode = False
         self.event = Clock.schedule_interval(self.update_info, 0.1)
 
     def update_info(self, *args):
         num_move = self.board.num_move
         if int(self.num_move_label.text) != num_move:
             self.num_move_label.text = str(num_move)
-        if self.pass_btn.text != "Pass" and \
-               self.board.num_passes < 2:
+
+        curr_end = self.board.num_passes >= 2
+        if self.in_end_mode and not curr_end:
             self.pass_btn.text = "Pass"
-        elif self.pass_btn.text == "Pass" and \
-               self.board.num_passes >= 2:
-            self.pass_btn.text = "-"
+            # self.pass_btn.opacity = 1.0
+            self.in_end_mode = False
+        elif not self.in_end_mode and curr_end:
+            self.pass_btn.text = self._get_final_score()
+            # self.pass_btn.opacity = 0.0
+            self.in_end_mode = True
+        elif self.in_end_mode and curr_end:
+            # may be update the dead stones so we keep to update
+            # the final score.
+            self.pass_btn.text = self._get_final_score()
+
+    def _get_final_score(self):
+        territory, stones, prisoners = self.board.get_finalscore_statistics()
+        komi = self.board.komi
+
+        scoring_rule = self.config.get("game")["rule"].lower()
+        scores = [0, 0]
+        if scoring_rule in ["japanese", "territory", "jp"]:
+            scores = [
+                territory[Board.BLACK] + prisoners[Board.BLACK] - komi,
+                territory[Board.WHITE] + prisoners[Board.WHITE]
+            ]
+        elif scoring_rule in ["chinese", "area", "cn"]:
+            scores = [
+                territory[Board.BLACK] + stones[Board.BLACK] - komi,
+                territory[Board.WHITE] + stones[Board.WHITE]
+            ]
+
+        diff = scores[Board.BLACK] - scores[Board.WHITE]
+        text = str()
+        if abs(diff) < 0.1:
+            text = "Draw"
+        elif diff > 0.0:
+            text = "B+{}".format(diff)
+        elif diff < 0.0:
+            text= "W+{}".format(-diff)
+        return text
 
     def play_pass(self):
         if self.board.num_passes < 2 and \
@@ -526,43 +562,6 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
 class InfoPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(InfoPanelWidget, self).__init__(**kwargs)
-        self.event = Clock.schedule_interval(self.update_info, 0.1)
-
-    def update_info(self, *args):
-        if self.board.num_passes >= 2:
-            territory, stones, prisoners = self.board.get_finalscore_statistics()
-            komi = self.board.komi
-
-            scoring_rule = self.config.get("game")["rule"].lower()
-            scores = [0, 0]
-            if cfg_rule in ["japanese", "territory", "jp"]:
-                scores = [
-                    territory[Board.BLACK] + prisoners[Board.BLACK] - komi,
-                    territory[Board.WHITE] + prisoners[Board.WHITE]
-                ]
-                scoring_rule = "territory"
-            elif cfg_rule in ["chinese", "area", "cn"]:
-                scores = [
-                    territory[Board.BLACK] + stones[Board.BLACK] - komi,
-                    territory[Board.WHITE] + stones[Board.WHITE]
-                ]
-                scoring_rule = "area"
-            text = str()
-            text += "Using {} scoring.\n".format(scoring_rule)
-            text += "Black has {:.1f} points.\n".format(scores[Board.BLACK])
-            text += "White has {:.1f} points.\n".format(scores[Board.WHITE])
-
-            diff = scores[Board.BLACK] - scores[Board.WHITE]
-            if abs(diff) < 0.1:
-                text += "The result is draw."
-            elif diff > 0.0:
-                text += "The result is B+{}".format(diff)
-            elif diff < 0.0:
-                text += "The result is W+{}".format(-diff)
-
-            self.infobox.text = text
-        else:
-            self.infobox.text = "Hello, I am Lemon!"
 
 class AnalysisParser(list):
     SUPPORTED_KEYS = [
