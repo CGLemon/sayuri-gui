@@ -231,7 +231,7 @@ class BoardPanelWidget(Widget):
                             not self.pv_start_pos is None and \
                             board.get_stone(self.pv_start_pos) == Board.EMPTY and \
                             analysis is not None
-        main_info, pv_list = None, None
+        main_info = None
         if show_pv_board:
             board = board.copy()
             pv_list = list()
@@ -265,8 +265,8 @@ class BoardPanelWidget(Widget):
                     stone_colors[color].get(),
                     outline_color=outline_colors[color].get())
             if show_pv_board:
-                if main_info.get("ownership"):
-                    self.draw_ownermap(main_info["ownership"])
+                if not main_info is None:
+                    self.draw_ownermap(main_info.get("ownership"))
                 unique_pv_buf = set()
                 for idx, vtx in reversed(list(enumerate(pv_list))):
                     if not vtx.is_move():
@@ -416,10 +416,12 @@ class BoardPanelWidget(Widget):
                         outline_align="center")
 
             root_info = analysis.get_root_info()
-            if root_info and root_info.get("ownership"):
-                self.draw_ownermap(root_info["ownership"], forbidmap)
+            if not root_info is None:
+                self.draw_ownermap(root_info.get("ownership"), forbidmap)
 
     def draw_ownermap(self, ownermap, forbidmap=[]):
+        if ownermap is None:
+            return
         board = self.tree.get_val()["board"]
         stone_colors = Theme.STONE_COLORS
         board_size = board.board_size
