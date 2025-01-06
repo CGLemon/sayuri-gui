@@ -19,6 +19,7 @@ import math
 from tree import Tree, NodeKey
 from board import Board
 from gtp import GtpEngine, GtpVertex
+from analysis import AnalysisParser
 from theme import Theme
 import sys
 
@@ -59,7 +60,7 @@ class BoardPanelWidget(Widget):
                 xd, xp, yd, yp = self._find_closest(relative_pos)
 
                 if analysis and max(yd, xd) < self.grid_size / 2:
-                    for info in analysis:
+                    for info in analysis.get_sorted_moves():
                         if not info["move"].is_move():
                             continue
                         x, y = info["move"].get()
@@ -230,14 +231,13 @@ class BoardPanelWidget(Widget):
                             not self.pv_start_pos is None and \
                             board.get_stone(self.pv_start_pos) == Board.EMPTY and \
                             analysis is not None
-        main_info = None
+        main_info, pv_list = None, None
         if show_pv_board:
             board = board.copy()
             pv_list = list()
-            for info in analysis:
-                if not info["move"].is_move():
-                    continue
-                if info["move"].get() == self.pv_start_pos:
+            for info in analysis.get_sorted_moves():
+                if info["move"].is_move() and \
+                       info["move"].get() == self.pv_start_pos:
                     main_info = info
                     pv_list = info["pv"]
             for vtx in pv_list:
@@ -253,22 +253,20 @@ class BoardPanelWidget(Widget):
             stone_colors = Theme.STONE_COLORS
             laststone_colors = Theme.LAST_COLORS
             outline_colors = Theme.OUTLINE_COLORS
-            ownership = self.config.get("engine")["use_ownership"]
             light_col = (0.99, 0.99, 0.99)
             stones_coord = board.get_stones_coord()
 
+            last_move = None
             for color, x, y in stones_coord:
-                inner = laststone_colors[color] if board.is_last_move((x,y)) else None
+                if board.is_last_move((x,y)):
+                    last_move = (x, y, laststone_colors[color])
                 self.draw_circle(
                     x, y,
                     stone_colors[color].get(),
                     outline_color=outline_colors[color].get())
-                if inner:
-                    self.draw_circle(
-                        x, y, inner.get(), scale=0.35)
             if show_pv_board:
-                if ownership and main_info.get("movesownership"):
-                    self.draw_ownermap(main_info["movesownership"])
+                if main_info.get("ownership"):
+                    self.draw_ownermap(main_info["ownership"])
                 unique_pv_buf = set()
                 for idx, vtx in reversed(list(enumerate(pv_list))):
                     if not vtx.is_move():
@@ -285,11 +283,12 @@ class BoardPanelWidget(Widget):
                             color=stone_colors[col].get(),
                             font_size=self.grid_size / 2.5,
                             halign="center")
-                # only draw stones on the board if it is in pv mode
-                return
-
-            self.draw_auxiliary_contents()
-            self.draw_analysis_contents()
+            else:
+                self.draw_auxiliary_contents()
+                self.draw_analysis_contents()
+            if last_move:
+                x, y, color = last_move
+                self.draw_circle(x, y, color.get(), scale=0.35)
 
     def draw_auxiliary_contents(self):
         board = self.tree.get_val()["board"]
@@ -345,12 +344,13 @@ class BoardPanelWidget(Widget):
             return
 
         if board.num_passes < 2 and analysis:
+            sorted_moves = analysis.get_sorted_moves()
             best_color = (0.3, 0.85, 0.85)
             norm_color = (0.1, 0.75, 0.1)
-            tot_visits = sum(info["visits"] for info in analysis)
-            max_visits = max(info["visits"] for info in analysis)
+            tot_visits = sum(info["visits"] for info in sorted_moves)
+            max_visits = max(info["visits"] for info in sorted_moves)
 
-            for info in analysis:
+            for info in sorted_moves:
                 if show == "NA" or not info["move"].is_move():
                     # we can only draw the move on the board
                     continue
@@ -415,8 +415,9 @@ class BoardPanelWidget(Widget):
                         outline_scale=0.05,
                         outline_align="center")
 
-            if ownership and len(analysis.root_ownership) > 0:
-                self.draw_ownermap(analysis.root_ownership, forbidmap)
+            root_info = analysis.get_root_info()
+            if root_info and root_info.get("ownership"):
+                self.draw_ownermap(root_info["ownership"], forbidmap)
 
     def draw_ownermap(self, ownermap, forbidmap=[]):
         board = self.tree.get_val()["board"]
@@ -563,98 +564,6 @@ class InfoPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(InfoPanelWidget, self).__init__(**kwargs)
 
-class AnalysisParser(list):
-    SUPPORTED_KEYS = [
-        "info", "move", "visits", "winrate", "scorelead", "prior", "lcb", "order", "pv", "ownership", "movesownership"]
-
-    def __init__(self, data):
-        super(AnalysisParser, self).__init__()
-        self.data = data
-        self.datalist = data.split()
-        self.root_ownership = list()
-        self._parse()
-
-    def _back(self):
-        self.idx -= 1
-
-    def _next_token(self):
-        if self.idx >= len(self.datalist):
-            return None
-        token = self.datalist[self.idx]
-        self.idx += 1
-        return token.lower()
-
-    def _next_number(self):
-        t = self._next_token()
-        return self._token_to_number(t)
-
-    def _token_to_number(self, t):
-        try:
-            return int(t)
-        except ValueError:
-            return float(t)
-
-    def _get_sequential_tokens(self, trans_fn=None):
-        tokens = list()
-        while True:
-            token = self._next_token()
-            if token == None:
-                break
-            if token in self.SUPPORTED_KEYS:
-                self._back()
-                break
-            if trans_fn:
-                tokens.append(trans_fn(token))
-            else:
-                tokens.append(token)
-        return tokens
-
-    def _parse(self):
-        self.idx = 0
-        while True:
-            token = self._next_token()
-            if token == None:
-                break
-            if token == "info":
-                self.append(dict())
-            elif token == "ownership":
-                self.root_ownership = self._get_sequential_tokens(
-                    self._token_to_number
-                )
-            elif token == "move":
-                self[-1]["move"] = GtpVertex(self._next_token())
-            elif token == "visits":
-                self[-1]["visits"] = self._next_number()
-            elif token == "winrate":
-                num = self._next_number()
-                if type(num) == int:
-                    num = float(num) / 10000.
-                self[-1]["winrate"] = num
-            elif token == "scorelead":
-                self[-1]["scorelead"] = self._next_number()
-            elif token == "prior":
-                num = self._next_number()
-                if type(num) == int:
-                    num = float(num) / 10000.
-                self[-1]["prior"] = num
-            elif token == "lcb":
-                num = self._next_number()
-                if type(num) == int:
-                    num = float(num) / 10000.
-                self[-1]["lcb"] = num
-            elif token == "order":
-                self[-1]["order"] = self._next_number()
-            elif token == "pv":
-                self[-1]["pv"] = self._get_sequential_tokens(
-                    GtpVertex
-                )
-            elif token == "movesownership":
-                self[-1]["movesownership"] = self._get_sequential_tokens(
-                    self._token_to_number
-                )
-            else:
-                pass
-
 class EngineControls:
     def __init__(self, parent):
         self.parent = parent
@@ -742,10 +651,9 @@ class EngineControls:
         elif action["action"] == "analyze":
             col = action["color"]
             ownership = self.parent.config.get("engine")["use_ownership"]
-            movesownership = ownership
             self.engine.send_command(
-                "sayuri-analyze {} {} ownership {} movesownership {}".format(
-                col, 50, ownership, movesownership))
+                "sayuri-analyze {} {} ownership {}".format(
+                col, 50, ownership))
             self.analyzing = True
         elif action["action"] == "stop-analyze":
             self.engine.send_command("protocol_version")
@@ -767,12 +675,7 @@ class EngineControls:
                 last_line = line
 
         if self.analyzing and last_line:
-            analysis = AnalysisParser(last_line["data"])
-            analysis.sort(key=lambda x:x["order"], reverse=False)
-
-            self.parent.tree.get_val()["move"] = analysis[0]["move"]
-            self.parent.tree.get_val()["visits"] = sum(info["visits"] for info in analysis)
-            self.parent.tree.get_val()["analysis"] = analysis
+            self.parent.tree.get_val()["analysis"] = AnalysisParser(last_line["data"])
             self.parent.tree.update_tag()
             if not self.parent.analysis_mode:
                 self.parent.engine.do_action({ "action" : "stop-analyze" })

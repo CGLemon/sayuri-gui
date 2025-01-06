@@ -60,8 +60,11 @@ class GtpColor:
 class GtpVertex:
     PASS_STR = "pass"
     RESIGN_STR = "resign"
+    NULL_STR = "null"
+
     PASS_VERTEX = 100 * 100
     RESIGN_VERTEX = 100 * 100 + 1
+    NULL_VERTEX = 100 * 100 + 2
 
     def __init__(self, val=None):
         self._vertex = None
@@ -76,7 +79,8 @@ class GtpVertex:
             self._parse_coord(val)
         elif isinstance(val, int):
             if val == self.PASS_VERTEX or \
-                   val == self.RESIGN_VERTEX:
+                   val == self.RESIGN_VERTEX or \
+                   val == self.NULL_VERTEX:
                 self._vertex = val
         else:
             raise Exception("Not a vertex data.")
@@ -101,6 +105,8 @@ class GtpVertex:
             self._vertex = self.PASS_VERTEX
         elif val == self.RESIGN_STR.lower():
             self._vertex = self.RESIGN_VERTEX
+        elif val == self.NULL_STR.lower():
+            self._vertex = self.NULL_VERTEX
         else:
             x = ord(val[0]) - ord('a')
             if x >= (ord('i') - ord('a')):
@@ -120,9 +126,13 @@ class GtpVertex:
     def is_resign(self):
         return str(self) == self.RESIGN_STR
 
+    def is_null(self):
+        return str(self) == self.NULL_STR
+
     def is_move(self):
         return not self.is_pass() and \
-                   not self.is_resign()
+                   not self.is_resign() and \
+                   not self.is_null()
 
     def to_str(self):
         if self._vertex is None:
@@ -131,7 +141,9 @@ class GtpVertex:
         if isinstance(self._vertex, int):
             if self._vertex == self.PASS_VERTEX:
                 return self.PASS_STR
-            return self.RESIGN_STR
+            elif self._vertex == self.RESIGN_VERTEX:
+                return self.RESIGN_STR
+            return self.NULL_STR
 
         # must be the tuple
         x, y = self._vertex
