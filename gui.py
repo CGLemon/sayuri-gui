@@ -14,14 +14,13 @@ from kivy.clock import Clock
 
 from kivy.core.text import Label as CoreLabel
 from kivy.storage.jsonstore import JsonStore
-import math
 
 from tree import Tree, NodeKey
 from board import Board
 from gtp import GtpEngine, GtpVertex
 from analysis import AnalysisParser
 from theme import Theme
-import sys
+import sys, time, math
 
 kivy.config.Config.set("input", "mouse", "mouse,multitouch_on_demand")
 DefaultConfig = JsonStore("config.json")
@@ -647,18 +646,23 @@ class EngineControls:
         if action["action"] == "play":
             col = action["color"]
             vtx = action["vertex"]
-            self.engine.send_command("play {} {}".format(col, vtx))
+            gtp_command = "play {} {}".format(col, vtx)
         elif action["action"] == "undo":
-            self.engine.send_command("undo")
+            gtp_command = "undo"
         elif action["action"] == "analyze":
             col = action["color"]
             ownership = self.parent.config.get("engine")["use_ownership"]
-            self.engine.send_command(
-                "sayuri-analyze {} {} ownership {}".format(
-                col, 50, ownership))
+            gtp_command = "sayuri-analyze {} {} ownership {}".format(
+                              col, 50, ownership)
             self.analyzing = True
         elif action["action"] == "stop-analyze":
-            self.engine.send_command("protocol_version")
+            gtp_command = "protocol_version"
+        else:
+            return
+
+        self.engine.send_command(gtp_command)
+        if action["action"] == "analyze":
+            time.sleep(0.05)
 
     def handle_engine_result(self, args):
         if not self.engine:
