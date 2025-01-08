@@ -6,6 +6,7 @@ class AnalysisParser(list):
         "move",
         "visits",
         "winrate",
+        "drawrate",
         "scorelead",
         "prior",
         "lcb",
@@ -87,6 +88,11 @@ class AnalysisParser(list):
                 if type(num) == int:
                     num = float(num) / 10000.
                 self[-1]["winrate"] = num
+            elif token == "drawrate":
+                num = self._next_number()
+                if type(num) == int:
+                    num = float(num) / 10000.
+                self[-1]["drawrate"] = num
             elif token == "scorelead":
                 self[-1]["scorelead"] = self._next_number()
             elif token == "prior":

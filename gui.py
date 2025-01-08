@@ -369,11 +369,13 @@ class BoardPanelWidget(Widget):
                     show_lines = 0
                     text_str = str()
                     for show_mode in show.split("+"):
-                        if show_mode in ["W", "S", "V", "P"] and len(text_str) > 0:
+                        if show_mode in ["W", "D", "S", "V", "P"] and len(text_str) > 0:
                             show_lines += 1
                             text_str += "\n"
                         if "W" == show_mode:
                             text_str += "{}".format(round(info["winrate"] * 100))
+                        if "D" == show_mode:
+                            text_str += "{}".format(round(info["drawrate"] * 100))
                         elif "S" == show_mode:
                             text_str += "{:.1f}".format(info["scorelead"])
                         elif "V" == show_mode:
