@@ -27,7 +27,7 @@ DefaultConfig = JsonStore("config.json")
 
 def draw_text(pos, text, color, **kw):
     Color(*color)
-    label = CoreLabel(text=text, bold=False, **kw)
+    label = CoreLabel(text=text, bold=True, **kw)
     label.refresh()
     Rectangle(
         texture=label.texture,
@@ -35,6 +35,9 @@ def draw_text(pos, text, color, **kw):
         size=label.texture.size)
 
 class BackgroundColor(Widget):
+    pass
+
+class RectangleBorder(Widget):
     pass
 
 class BoardPanelWidget(Widget):
@@ -552,9 +555,35 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
         self.tree.reset({ "board" : self.board.copy() })
         self.engine.sync_engine_state()
 
-class GraphPanelWidget(BoxLayout):
+class GraphPanelWidget(BoxLayout, RectangleBorder):
     def __init__(self, **kwargs):
-        super(GraphPanelWidget, self).__init__(**kwargs)    
+        super(GraphPanelWidget, self).__init__(**kwargs)
+
+    def _get_stats_history(self, pathinfo):
+        blackwinrate, drawrate, first_stats = None, None, None
+        stats_history = list()
+        for i, (board, info) in enumerate(pathinfo):
+            col = board.get_gtp_color(board.to_move)
+            if not info is None:
+                blackwinrate = info["winrate"] if col.is_black() else 1.0 - info["winrate"]
+                drawrate = info["drawrate"]
+
+            stats_history.append(
+                {"blackwinrate" : blackwinrate,
+                 "drawrate" : drawrate}
+            )
+            if first_stats is None and not blackwinrate is None:
+                first_stats = stats_history[-1]
+        if first_stats is None:
+            stats_history.clear()
+        else:
+            for stats in stats_history:
+                if stats["blackwinrate"] is None:
+                    for key in stats.keys():
+                        stats[key] = first_stats[key]
+                else:
+                    break
+        return stats_history
 
     def update(self, tree):
         pathinfo = list()
@@ -566,30 +595,62 @@ class GraphPanelWidget(BoxLayout):
             else:
                 pathinfo.append((board, None))
 
-        self.canvas.before.clear()
-        with self.canvas.before:
-            Color(*Theme.BOARD_COLOR.get())
-            Rectangle(pos=self.pos, size=self.size)
+        while len(pathinfo) > 0 and pathinfo[-1][1] is None:
+            pathinfo.pop(-1)
 
-            lines = max(50, len(pathinfo) + 10)
-            mw = self.width / lines
-            for i, (board, info) in enumerate(pathinfo):
-                col = board.get_gtp_color(board.to_move)
-                if info is None:
-                    continue
-                winrate = info["winrate"]
-                if col.is_white():
-                    winrate = 1.0 - winrate
-                Color(*Theme.BLACK_STONE_COLOR.get())
+        stats_history = self._get_stats_history(pathinfo)
+        depth = max(min(tree.get_depth(), len(stats_history) - 1), 0)
+
+        self.canvas.clear()
+        with self.canvas:
+            mw = self.width / max(len(pathinfo), 1)
+            points = list()
+
+            for i, stats in enumerate(stats_history):
+                blackwinrate, drawrate = stats["blackwinrate"], stats["drawrate"]
+                wdl_rate = [
+                    blackwinrate - drawrate/2,
+                    blackwinrate + drawrate/2
+                ]
+                wdl_ypos = [
+                    self.pos[1] + 0,
+                    self.pos[1] + round(wdl_rate[0] * self.height),
+                    self.pos[1] + round(wdl_rate[1] * self.height),
+                    self.pos[1] + self.height
+                ]
+                Color(*Theme.BLACK_WINRATE_COLOR.get())
                 Rectangle(
-                    pos=(self.pos[0] + mw * i, self.pos[1]),
-                    size=(mw, round(winrate * self.height))
+                    pos=(self.pos[0] + mw * i, wdl_ypos[0]),
+                    size=(mw, wdl_ypos[1] - wdl_ypos[0])
                 )
-                Color(*Theme.WHITE_STONE_COLOR.get())
+                Color(*Theme.DRAWRATE_COLOR.get())
                 Rectangle(
-                    pos=(self.pos[0] + mw * i, self.pos[1] + round(winrate * self.height)),
-                    size=(mw, self.height - round(winrate * self.height))
+                    pos=(self.pos[0] + mw * i, wdl_ypos[1]),
+                    size=(mw, wdl_ypos[2] - wdl_ypos[1])
                 )
+                Color(*Theme.WHITE_WINRATE_COLOR.get())
+                Rectangle(
+                    pos=(self.pos[0] + mw * i, wdl_ypos[2]),
+                    size=(mw, wdl_ypos[3] - wdl_ypos[2])
+                )
+                p0 = self.pos[0] + round(mw * (i + 0.5))
+                points.append(
+                    (p0, self.pos[1] + round(blackwinrate * self.height))
+                )
+                if depth == i:
+                    Color(*Theme.WINRATE_AUX_LINE_COLOR.get())
+                    Line(points=[(p0, self.pos[1]), (p0, self.pos[1] + self.height)])
+            if len(points) >= 2:
+                Color(*Theme.WINRATE_LINE_COLOR.get())
+                Line(points=points, width=2)
+            if len(stats_history) > 0:
+                front_size = round(min(self.width, self.height) / 12)
+                draw_text(
+                    pos=(self.pos[0] + self.width/2, self.pos[1] + front_size),
+                    text="{} ({:.2f}%)".format(depth, stats_history[depth]["blackwinrate"] * 100),
+                    color=Theme.WINRATE_AUX_LINE_COLOR.get(),
+                    font_size=front_size,
+                    halign="center")
 
 class InfoPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
@@ -729,6 +790,8 @@ class EngineControls:
     def on_request_close(self, *args, source=None):
         if not self.engine:
             return
+        if self.analyzing:
+            self.parent.engine.do_action({ "action" : "stop-analyze" })
         self.engine.quit()
         self.engine.shutdown()
 

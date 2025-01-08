@@ -19,9 +19,10 @@ class NodeKey:
         return ret
 
 class Node:
-    def __init__(self, val, key=None, parent=None):
+    def __init__(self, val, key=None, parent=None, depth=0):
         self.val = val
         self.key = key
+        self.depth = depth
         self.parent = parent
         self.default = None
         self.children = dict()
@@ -29,7 +30,7 @@ class Node:
 
     def try_add_child(self, key, val):
         if not key in self.children.keys():
-            self.children[key] = Node(val, key, self)
+            self.children[key] = Node(val, key, self, self.depth+1)
         self.default = self.children[key]
 
     def update_tag(self):
@@ -55,6 +56,7 @@ class Tree:
     def reset(self, val):
         self.root.val = val
         self.root.key = None
+        self.root.depth = 0
         self.root.default = None
         self.root.children.clear()
         self.root.update_tag()
@@ -72,15 +74,16 @@ class Tree:
     def get_key(self):
         return self.curr.get_key()
 
+    def get_depth(self):
+        return self.curr.depth
+
     def get_parent(self):
         return self.curr.parent
 
     def get_root_mainpath(self):
         path = self.root
-        while True:
+        while path:
             yield path
-            if path.get_tag() == self.curr.get_tag():
-                break
             path = path.default
 
     def add_and_forward(self, key, val):

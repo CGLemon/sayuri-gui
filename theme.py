@@ -16,6 +16,13 @@ class ColorCode:
         other.code[-1] = alpha
         return other
 
+    def average_color(self, color):
+        retcode = list()
+        for a, b in zip(self.code, color.code):
+            retcode.append((a+b)/2)
+        other = ColorCode(retcode)
+        return other
+
     def get(self):
         return self.code
 
@@ -34,9 +41,13 @@ class ColorCode:
         if len(self.code) == 3:
             self.code.append(1.0)
 
+    def __str__(self):
+        return "{}".format(self.code)
+
 FAVOR_BLACK = ColorCode([0.1, 0.1, 0.1])
 FAVOR_WHITE = ColorCode([0.9, 0.9, 0.9])
 FAVOR_RED = ColorCode([0.95, 0.45, 0.55])
+FAVOR_GREEN = ColorCode([0.15, 0.82, 0.15])
 
 class Theme:
     DEFAULT_BACKGROUND_COLOR = ColorCode([94, 128, 178, 255])
@@ -56,6 +67,12 @@ class Theme:
     WHITE_UNDO_COLOR = ColorCode([0.9, 0.9, 0.9, 0.5])
     UNDO_COLORS = [BLACK_UNDO_COLOR, WHITE_UNDO_COLOR]
     GHOST_ALPHA = 0.5
+
+    BLACK_WINRATE_COLOR = FAVOR_BLACK.bind_alpha(0.7)
+    WHITE_WINRATE_COLOR = FAVOR_WHITE.bind_alpha(0.7)
+    DRAWRATE_COLOR = BLACK_WINRATE_COLOR.average_color(WHITE_WINRATE_COLOR)
+    WINRATE_LINE_COLOR = FAVOR_GREEN.bind_alpha(0.7)
+    WINRATE_AUX_LINE_COLOR = FAVOR_RED.bind_alpha(1.0)
 
     BOARD_MARGIN = 1.5
     STARPOINT_SIZE = 0.1

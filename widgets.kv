@@ -9,7 +9,7 @@
             size: self.size
             pos: self.pos
 
-<RectangleBorder@Widget>:
+<RectangleBorder>:
     border_color: 0, 0, 0, 0
     canvas.before:
         Color:
@@ -133,6 +133,9 @@
             on_release: root.switch_to_gameanalysis()
     Label:
         size_hint: 1, 0.15
+
+<GraphPanelWidget>:
+    border_color: 0.95, 0.95, 0.95, 1
 
 <InfoPanelWidget>:
     opacity: 1
