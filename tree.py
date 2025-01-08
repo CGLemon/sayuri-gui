@@ -8,6 +8,9 @@ class NodeKey:
     def unpack(self):
         return self.color, self.vertex
 
+    def __eq__(self, other):
+        return self.__hash__() == hash(other)
+
     def __str__(self):
         return "{}-{}".format(self.color, self.vertex)
 
