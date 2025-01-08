@@ -138,7 +138,7 @@
     opacity: 1
     orientation: "horizontal"
     background_color: 0.15, 0.3, 0.4, 1
-    infobox: infobox
+    graphbox: graphbox
     config: app.config
     source: "img/lemon.png"
 
@@ -155,9 +155,8 @@
             size: self.texture_size
         Label:
             size_hint: 1, 0.05
-        TextLabel:
-            id: infobox
-            text:"Hello, I am Lemon!"
+        GraphPanelWidget:
+            id: graphbox
         Label:
             size_hint: 1, 0.05
     Label:

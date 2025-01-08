@@ -219,9 +219,6 @@ class BoardPanelWidget(Widget):
         self.last_board_content_tag = curr_tag
         board = self.tree.get_val()["board"]
 
-        if hash(board) != hash(self.board):
-            return
-
         # synchronize PV board
         forbid_pv = self.forbid_pv or \
                         not self.config.get("engine")["pv"]
@@ -295,9 +292,6 @@ class BoardPanelWidget(Widget):
         stone_colors = Theme.STONE_COLORS
         outline_colors = Theme.OUTLINE_COLORS
 
-        if hash(board) != hash(self.board):
-            return
-
         # hover next move ghost stone
         ghost_alpha = Theme.GHOST_ALPHA
         if self.ghost_stone:
@@ -338,9 +332,6 @@ class BoardPanelWidget(Widget):
         ownership = self.config.get("engine")["use_ownership"]
         show = self.config.get("engine")["show"]
         forbidmap = list()
-
-        if hash(board) != hash(self.board):
-            return
 
         if board.num_passes < 2 and analysis:
             sorted_moves = analysis.get_sorted_moves()
@@ -474,11 +465,9 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
         curr_end = self.board.num_passes >= 2
         if self.in_end_mode and not curr_end:
             self.pass_btn.text = "Pass"
-            # self.pass_btn.opacity = 1.0
             self.in_end_mode = False
         elif not self.in_end_mode and curr_end:
             self.pass_btn.text = self._get_final_score()
-            # self.pass_btn.opacity = 0.0
             self.in_end_mode = True
         elif self.in_end_mode and curr_end:
             # may be update the dead stones so we keep to update
@@ -563,9 +552,52 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
         self.tree.reset({ "board" : self.board.copy() })
         self.engine.sync_engine_state()
 
+class GraphPanelWidget(BoxLayout):
+    def __init__(self, **kwargs):
+        super(GraphPanelWidget, self).__init__(**kwargs)    
+
+    def update(self, tree):
+        pathinfo = list()
+        for node in tree.get_root_mainpath():
+            analysis = node.get_val().get("analysis")
+            board = node.get_val()["board"]
+            if not analysis is None:
+                pathinfo.append((board, analysis.get_sorted_moves()[0]))
+            else:
+                pathinfo.append((board, None))
+
+        self.canvas.before.clear()
+        with self.canvas.before:
+            Color(*Theme.BOARD_COLOR.get())
+            Rectangle(pos=self.pos, size=self.size)
+
+            lines = max(50, len(pathinfo) + 10)
+            mw = self.width / lines
+            for i, (board, info) in enumerate(pathinfo):
+                col = board.get_gtp_color(board.to_move)
+                if info is None:
+                    continue
+                winrate = info["winrate"]
+                if col.is_white():
+                    winrate = 1.0 - winrate
+                Color(*Theme.BLACK_STONE_COLOR.get())
+                Rectangle(
+                    pos=(self.pos[0] + mw * i, self.pos[1]),
+                    size=(mw, round(winrate * self.height))
+                )
+                Color(*Theme.WHITE_STONE_COLOR.get())
+                Rectangle(
+                    pos=(self.pos[0] + mw * i, self.pos[1] + round(winrate * self.height)),
+                    size=(mw, self.height - round(winrate * self.height))
+                )
+
 class InfoPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(InfoPanelWidget, self).__init__(**kwargs)
+        self.event = Clock.schedule_interval(self.draw_graph, 0.2)
+
+    def draw_graph(self, *args):
+        self.graphbox.update(self.tree)
 
 class EngineControls:
     def __init__(self, parent):
@@ -666,7 +698,7 @@ class EngineControls:
         if action["action"] == "analyze":
             time.sleep(0.05)
 
-    def handle_engine_result(self, args):
+    def handle_engine_result(self, *args):
         if not self.engine:
             return
 

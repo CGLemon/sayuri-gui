@@ -72,6 +72,14 @@ class Tree:
     def get_parent(self):
         return self.curr.parent
 
+    def get_root_mainpath(self):
+        path = self.root
+        while True:
+            yield path
+            if path.get_tag() == self.curr.get_tag():
+                break
+            path = path.default
+
     def add_and_forward(self, key, val):
         self.curr.try_add_child(key, val)
         self.curr = self.curr.default
