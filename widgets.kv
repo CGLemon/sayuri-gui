@@ -11,7 +11,7 @@
 
 <RectangleBorder>:
     border_color: 0, 0, 0, 0
-    canvas.before:
+    canvas.after:
         Color:
             rgba: root.border_color
         Line:
@@ -60,7 +60,7 @@
 
 <MenuPanelWidget>:
     orientation: "horizontal"
-    background_color: 0.23, 0.30, 0.35, 1
+    background_color: Theme.DEFAULT_MENU_COLOR.get()
     manager: app.manager
 
     StyledActionButton:
@@ -72,7 +72,7 @@
 
 <ControlsPanelWidget>:
     orientation: "vertical"
-    background_color: 0.23, 0.30, 0.35, 1
+    background_color: Theme.DEFAULT_MENU_COLOR.get()
 	num_move_label: num_move_label
     pass_btn: pass_btn
     manager: app.manager
@@ -135,35 +135,15 @@
         size_hint: 1, 0.15
 
 <GraphPanelWidget>:
-    border_color: 0.95, 0.95, 0.95, 1
+    opacity: 1
+    border_color: Theme.PANEL_LINE_COLOR.get()
+    background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
 
 <InfoPanelWidget>:
     opacity: 1
     orientation: "horizontal"
-    background_color: 0.15, 0.3, 0.4, 1
-    graphbox: graphbox
-    config: app.config
-    source: "img/lemon.png"
-
-    Label:
-        size_hint: 0.05, 1
-    BoxLayout:
-        orientation: "vertical"
-        size_hint: 0.9, 1
-        Label:
-            size_hint: 1, 0.05
-        Image:
-            size_hint: 1, 0.45
-            source: root.source
-            size: self.texture_size
-        Label:
-            size_hint: 1, 0.05
-        GraphPanelWidget:
-            id: graphbox
-        Label:
-            size_hint: 1, 0.05
-    Label:
-        size_hint: 0.05, 1
+    border_color: Theme.PANEL_LINE_COLOR.get()
+    background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
 
 <GamePanelWidget>:
     orientation: "vertical"
@@ -180,22 +160,23 @@
             size_hint: 0.02, 1
         BoxLayout:
             orientation: "vertical"
-            size_hint: 0.2, 1
+            size_hint: 0.25, 1
             Label:
                 size_hint: 1, 0.05
-            InfoPanelWidget:
-                size_hint: 1, 0.55
-                board: root.board
+            GraphPanelWidget:
+                size_hint: 1, 0.35
                 tree: root.tree
-                engine: root.engine
-                source: "img/lemon.png"
             Label:
-                size_hint: 1, 0.4
+                size_hint: 1, 0.05
+            InfoPanelWidget
+                size_hint: 1, 0.45
+            Label:
+                size_hint: 1, 0.1
         Label:
             size_hint: 0.02, 1
         BoardPanelWidget:
             id: board_panel
-            size_hint: 0.6, 1
+            size_hint: 0.5, 1
             board: root.board
             tree: root.tree
             engine: root.engine
@@ -204,7 +185,7 @@
             size_hint: 0.02, 1
         BoxLayout:
             orientation: "vertical"
-            size_hint: 0.2, 1
+            size_hint: 0.25, 1
         Label:
             size_hint: 0.02, 1
     ControlsPanelWidget:

@@ -555,22 +555,26 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
         self.tree.reset({ "board" : self.board.copy() })
         self.engine.sync_engine_state()
 
-class GraphPanelWidget(BoxLayout, RectangleBorder):
+class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
         super(GraphPanelWidget, self).__init__(**kwargs)
+        self.event = Clock.schedule_interval(self.draw_graph, 0.2)
 
     def _get_stats_history(self, pathinfo):
-        blackwinrate, drawrate, first_stats = None, None, None
+        blackwinrate, blackscore, drawrate, first_stats = None, None, None, None
         stats_history = list()
         for i, (board, info) in enumerate(pathinfo):
             col = board.get_gtp_color(board.to_move)
             if not info is None:
                 blackwinrate = info["winrate"] if col.is_black() else 1.0 - info["winrate"]
+                blackscore = info["scorelead"] if col.is_black() else -info["scorelead"]
                 drawrate = info["drawrate"]
-
+            bestmove = None if info is None else info["move"]
             stats_history.append(
                 {"blackwinrate" : blackwinrate,
-                 "drawrate" : drawrate}
+                 "blackscore" : blackscore,
+                 "drawrate" : drawrate,
+                 "bestmove" : bestmove}
             )
             if first_stats is None and not blackwinrate is None:
                 first_stats = stats_history[-1]
@@ -585,9 +589,9 @@ class GraphPanelWidget(BoxLayout, RectangleBorder):
                     break
         return stats_history
 
-    def update(self, tree):
+    def draw_graph(self, *args):
         pathinfo = list()
-        for node in tree.get_root_mainpath():
+        for node in self.tree.get_root_mainpath():
             analysis = node.get_val().get("analysis")
             board = node.get_val()["board"]
             if not analysis is None:
@@ -599,11 +603,15 @@ class GraphPanelWidget(BoxLayout, RectangleBorder):
             pathinfo.pop(-1)
 
         stats_history = self._get_stats_history(pathinfo)
-        depth = max(min(tree.get_depth(), len(stats_history) - 1), 0)
+        depth = max(min(self.tree.get_depth(), len(stats_history) - 1), 0)
 
         self.canvas.clear()
         with self.canvas:
-            mw = self.width / max(len(pathinfo), 1)
+            margin = 0.1
+            graph_pos = (self.pos[0],  self.pos[1] + self.height * margin)
+            graph_size = (self.width, self.height * (1.0 - margin))
+
+            mw = graph_size[0] / max(len(pathinfo), 1)
             points = list()
 
             for i, stats in enumerate(stats_history):
@@ -613,52 +621,51 @@ class GraphPanelWidget(BoxLayout, RectangleBorder):
                     blackwinrate + drawrate/2
                 ]
                 wdl_ypos = [
-                    self.pos[1] + 0,
-                    self.pos[1] + round(wdl_rate[0] * self.height),
-                    self.pos[1] + round(wdl_rate[1] * self.height),
-                    self.pos[1] + self.height
+                    graph_pos[1] + 0,
+                    graph_pos[1] + round(wdl_rate[0] * graph_size[1]),
+                    graph_pos[1] + round(wdl_rate[1] * graph_size[1]),
+                    graph_pos[1] + graph_size[1]
                 ]
                 Color(*Theme.BLACK_WINRATE_COLOR.get())
                 Rectangle(
-                    pos=(self.pos[0] + mw * i, wdl_ypos[0]),
+                    pos=(graph_pos[0] + mw * i, wdl_ypos[0]),
                     size=(mw, wdl_ypos[1] - wdl_ypos[0])
                 )
                 Color(*Theme.DRAWRATE_COLOR.get())
                 Rectangle(
-                    pos=(self.pos[0] + mw * i, wdl_ypos[1]),
+                    pos=(graph_pos[0] + mw * i, wdl_ypos[1]),
                     size=(mw, wdl_ypos[2] - wdl_ypos[1])
                 )
                 Color(*Theme.WHITE_WINRATE_COLOR.get())
                 Rectangle(
-                    pos=(self.pos[0] + mw * i, wdl_ypos[2]),
+                    pos=(graph_pos[0] + mw * i, wdl_ypos[2]),
                     size=(mw, wdl_ypos[3] - wdl_ypos[2])
                 )
-                p0 = self.pos[0] + round(mw * (i + 0.5))
+                p0 = graph_pos[0] + round(mw * (i + 0.5))
                 points.append(
-                    (p0, self.pos[1] + round(blackwinrate * self.height))
+                    (p0, graph_pos[1] + round(blackwinrate * graph_size[1]))
                 )
                 if depth == i:
                     Color(*Theme.WINRATE_AUX_LINE_COLOR.get())
-                    Line(points=[(p0, self.pos[1]), (p0, self.pos[1] + self.height)])
+                    Line(points=[(p0, graph_pos[1]), (p0, graph_pos[1] + graph_size[1])], width=1.5)
             if len(points) >= 2:
                 Color(*Theme.WINRATE_LINE_COLOR.get())
-                Line(points=points, width=2)
+                Line(points=points, width=2, dash_offset=2)
             if len(stats_history) > 0:
-                front_size = round(min(self.width, self.height) / 12)
+                stats = stats_history[depth]
+                front_size = round(min(self.width, self.height * margin)/2)
+                text_str = "Move {}: B {:.2f}% ({:.1f})".format(
+                    stats["bestmove"], stats["blackwinrate"] * 100, stats["blackscore"])
                 draw_text(
                     pos=(self.pos[0] + self.width/2, self.pos[1] + front_size),
-                    text="{} ({:.2f}%)".format(depth, stats_history[depth]["blackwinrate"] * 100),
-                    color=Theme.WINRATE_AUX_LINE_COLOR.get(),
+                    text=text_str,
+                    color=(0.95, 0.95, 0.95),
                     font_size=front_size,
                     halign="center")
 
-class InfoPanelWidget(BoxLayout, BackgroundColor):
+class InfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
         super(InfoPanelWidget, self).__init__(**kwargs)
-        self.event = Clock.schedule_interval(self.draw_graph, 0.2)
-
-    def draw_graph(self, *args):
-        self.graphbox.update(self.tree)
 
 class EngineControls:
     def __init__(self, parent):

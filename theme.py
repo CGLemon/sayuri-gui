@@ -50,7 +50,10 @@ FAVOR_RED = ColorCode([0.95, 0.45, 0.55])
 FAVOR_GREEN = ColorCode([0.15, 0.82, 0.15])
 
 class Theme:
-    DEFAULT_BACKGROUND_COLOR = ColorCode([94, 128, 178, 255])
+    DEFAULT_BACKGROUND_COLOR = ColorCode([0.37, 0.501, 0.70, 1.0])
+    DEFAULT_MENU_COLOR = ColorCode([0.23, 0.30, 0.35, 1.0])
+    PANEL_LINE_COLOR = ColorCode([0.95, 0.95, 0.95, 1.0])
+
     BLACK_STONE_COLOR = FAVOR_BLACK.bind_alpha(1.0)
     WHITE_STONE_COLOR = FAVOR_WHITE.bind_alpha(1.0)
     STONE_COLORS = [BLACK_STONE_COLOR, WHITE_STONE_COLOR]
