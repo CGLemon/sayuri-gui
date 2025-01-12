@@ -20,6 +20,7 @@ from board import Board
 from gtp import GtpEngine, GtpVertex
 from analysis import AnalysisParser
 from theme import Theme
+import sgf_parser
 import sys, time, math
 
 kivy.config.Config.set("input", "mouse", "mouse,multitouch_on_demand")
@@ -27,7 +28,7 @@ DefaultConfig = JsonStore("config.json")
 
 def draw_text(pos, text, color, **kw):
     Color(*color)
-    label = CoreLabel(text=text, bold=True, **kw)
+    label = CoreLabel(text=text, halign="center", valign="middle", bold=True, **kw)
     label.refresh()
     Rectangle(
         texture=label.texture,
@@ -39,6 +40,101 @@ class BackgroundColor(Widget):
 
 class RectangleBorder(Widget):
     pass
+
+class SimpleBoardPanelWidget(RectangleBorder):
+    def __init__(self, **kwargs):
+        super(SimpleBoardPanelWidget, self).__init__(**kwargs)
+
+    def draw_circle(self, x, y, color=None, **kwargs):
+        outline_color = kwargs.get("outline_color", None)
+        scale = kwargs.get("scale", 1.0)
+        outline_scale = kwargs.get("outline_scale", 0.065)
+        outline_align = kwargs.get("outline_align", "outer")
+        stone_size = self.stone_size * scale
+
+        if outline_color:
+            align_map = {
+                "inner" : 0,
+                "center" : 0.5,
+                "outer" : 1
+            }
+            Color(*outline_color)
+            width=outline_scale * stone_size
+            align_offset = width * align_map.get(outline_align, 0.5)
+            Line(circle=(self.gridpos_x[x], self.gridpos_y[y], stone_size + align_offset), width=width)
+        if color:
+            Color(*color)
+            r = stone_size
+            Ellipse(pos=(self.gridpos_x[x] - r, self.gridpos_y[y] - r), size=(2 * r, 2 * r))
+
+    def on_size(self, *args):
+        self.redraw()
+
+    def redraw(self, *args):
+        board_size = self.board.board_size
+        X_LABELS = self.board.X_LABELS
+
+        self.canvas.clear()
+        with self.canvas:
+            # board rectangle
+            square_size = min(self.width, self.height)
+            rect_pos = (self.center_x - square_size/2, self.center_y - square_size/2)
+            Color(*Theme.BOARD_COLOR.get())
+            board_rect = Rectangle(pos=rect_pos, size=(square_size, square_size))
+
+            # grid lines
+            margin = Theme.BOARD_MARGIN
+            self.grid_size = board_rect.size[0] / (board_size - 1 + 1.5 * margin)
+            self.stone_size = self.grid_size * Theme.STONE_SIZE
+            self.gridpos = [math.floor((margin + i) * self.grid_size + 0.5) for i in range(board_size)]
+            self.gridpos_x = [v + board_rect.pos[0] for v in self.gridpos]
+            self.gridpos_y = [v + board_rect.pos[1] for v in self.gridpos]
+
+            line_color = Theme.LINE_COLOR
+            Color(*line_color.get())
+            lo_x, hi_x = self.gridpos_x[0], self.gridpos_x[-1]
+            lo_y, hi_y = self.gridpos_y[0], self.gridpos_y[-1]
+            for i in range(board_size):
+                Line(points=[(self.gridpos_x[i], lo_y), (self.gridpos_x[i], hi_y)])
+                Line(points=[(lo_x, self.gridpos_y[i]), (hi_x, self.gridpos_y[i])])
+
+            # star points
+            star_scale = (self.grid_size/self.stone_size) * Theme.STARPOINT_SIZE
+            for x, y in [ (idx % board_size, idx // board_size) for idx in range(board_size * board_size)]:
+                if self.board.is_star((x,y)):
+                    self.draw_circle(
+                        x, y, line_color.get(), scale=star_scale)
+
+            # coordinates
+            lo = self.gridpos[0]
+            for i in range(board_size):
+                draw_text(
+                    pos=(self.gridpos_x[i], lo_y - lo / 2),
+                    text=X_LABELS[i],
+                    color=(0.25, 0.25, 0.25),
+                    font_size=self.grid_size / 1.5)
+                draw_text(
+                    pos=(lo_x - lo / 2, self.gridpos_y[i]),
+                    text=str(i + 1),
+                    color=(0.25, 0.25, 0.25),
+                    font_size=self.grid_size / 1.5)
+
+            # stones on board
+            stone_colors = Theme.STONE_COLORS
+            laststone_colors = Theme.LAST_COLORS
+            outline_colors = Theme.OUTLINE_COLORS
+            light_col = (0.99, 0.99, 0.99)
+            stones_coord = self.board.get_stones_coord()
+
+            for color, x, y in stones_coord:
+                self.draw_circle(
+                    x, y,
+                    stone_colors[color].get(),
+                    outline_color=outline_colors[color].get())
+
+                if self.board.is_last_move((x,y)):
+                    self.draw_circle(x, y, laststone_colors[color].get(), scale=0.35)
+
 
 class BoardPanelWidget(Widget):
     def __init__(self, **kwargs):
@@ -280,8 +376,7 @@ class BoardPanelWidget(Widget):
                             pos=(self.gridpos_x[x], self.gridpos_y[y]),
                             text="{}".format(idx+1),
                             color=stone_colors[col].get(),
-                            font_size=self.grid_size / 2.5,
-                            halign="center")
+                            font_size=self.grid_size / 2.5)
             else:
                 self.draw_auxiliary_contents()
                 self.draw_analysis_contents()
@@ -399,8 +494,7 @@ class BoardPanelWidget(Widget):
                         pos=(self.gridpos_x[x], self.gridpos_y[y]),
                         text=text_str,
                         color=(0.05, 0.05, 0.05),
-                        font_size=self.grid_size / font_size_div,
-                        halign="center")
+                        font_size=self.grid_size / font_size_div)
                     forbidmap.append((x,y))
                 else:
                     # fade candidate circle and draw aura
@@ -449,10 +543,9 @@ class MenuPanelWidget(BoxLayout, BackgroundColor):
         super(MenuPanelWidget, self).__init__(**kwargs)
 
     def switch_to_gameio(self):
-        # self.manager.transition.direction = "right"
-        # self.manager.current = "game-io"
-        # self.manager.get_screen("game-io").canvas.ask_update()
-        pass
+        self.manager.transition.direction = "right"
+        self.manager.current = "game-io"
+        self.manager.get_screen("game-io").canvas.ask_update()
 
 class ControlsPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
@@ -478,23 +571,7 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
             self.pass_btn.text = self._get_final_score()
 
     def _get_final_score(self):
-        territory, stones, prisoners = self.board.get_finalscore_statistics()
-        komi = self.board.komi
-
-        scoring_rule = self.config.get("game")["rule"].lower()
-        scores = [0, 0]
-        if scoring_rule in ["japanese", "territory", "jp"]:
-            scores = [
-                territory[Board.BLACK] + prisoners[Board.BLACK] - komi,
-                territory[Board.WHITE] + prisoners[Board.WHITE]
-            ]
-        elif scoring_rule in ["chinese", "area", "cn"]:
-            scores = [
-                territory[Board.BLACK] + stones[Board.BLACK] - komi,
-                territory[Board.WHITE] + stones[Board.WHITE]
-            ]
-
-        diff = scores[Board.BLACK] - scores[Board.WHITE]
+        diff = self.board.compute_finalscore(Board.BLACK)
         text = str()
         if abs(diff) < 0.1:
             text = "Draw"
@@ -547,13 +624,6 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
         self.manager.current = "game-analysis"
         self.manager.get_screen(self.manager.current).sync_config()
         self.manager.get_screen(self.manager.current).canvas.ask_update()
-
-    def reset_board(self):
-        size = self.board.board_size
-        komi = self.board.komi
-        self.board.reset(size, komi)
-        self.tree.reset({ "board" : self.board.copy() })
-        self.engine.sync_engine_state()
 
 class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
@@ -650,22 +720,84 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
                     Line(points=[(p0, graph_pos[1]), (p0, graph_pos[1] + graph_size[1])], width=1.5)
             if len(points) >= 2:
                 Color(*Theme.WINRATE_LINE_COLOR.get())
-                Line(points=points, width=2, dash_offset=2)
+                Line(points=points, width=1.5)
             if len(stats_history) > 0:
                 stats = stats_history[depth]
                 front_size = round(min(self.width, self.height * margin)/2)
                 text_str = "Move {}: B {:.2f}% ({:.1f})".format(
-                    stats["bestmove"], stats["blackwinrate"] * 100, stats["blackscore"])
+                    stats["bestmove"] if stats["bestmove"] else "null",
+                    stats["blackwinrate"] * 100, stats["blackscore"])
                 draw_text(
                     pos=(self.pos[0] + self.width/2, self.pos[1] + front_size),
                     text=text_str,
                     color=(0.95, 0.95, 0.95),
-                    font_size=front_size,
-                    halign="center")
+                    font_size=front_size)
+            else:
+                front_size = round(min(self.width, self.height * margin)/2)
+                text_str = "Move {}: B {:.2f}% ({:.1f})".format("null", 50.0, 0)
+                draw_text(
+                    pos=(self.pos[0] + self.width/2, self.pos[1] + front_size),
+                    text=text_str,
+                    color=(0.95, 0.95, 0.95),
+                    font_size=front_size)
 
 class InfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
         super(InfoPanelWidget, self).__init__(**kwargs)
+        self.event = Clock.schedule_interval(self.update_comment, 0.1)
+        self.last_board_content_tag = None
+
+    def on_size(self, *args):
+        self.last_board_content_tag = None
+
+    def update_comment(self, *args):
+        curr_tag = self.tree.get_tag()
+        if self.last_board_content_tag == curr_tag:
+            return
+        self.last_board_content_tag = curr_tag
+
+        graph_pos = [
+            self.tree_area.pos[0] + self.tree_area.size[0] * 0.1,
+            self.tree_area.pos[1]
+        ]
+        graph_size = [
+            self.tree_area.size[0] * 0.8,
+            self.tree_area.size[1]
+        ]
+
+        nodes = 0
+        for node in self.tree.get_root_mainpath():
+            nodes += 1
+        nodes = min(nodes, 10)
+        points = list()
+        if nodes > 1:
+            for i in range(nodes):
+                points.append(
+                    (graph_pos[0] + round(graph_size[0] / (nodes - 1) * i),
+                     graph_pos[1] + round(graph_size[1] / 2))
+                )
+        elif nodes == 1:
+            points.append(
+                (graph_pos[0] + round(graph_size[0] / 2),
+                 graph_pos[1] + round(graph_size[1] / 2))
+            )
+        self.canvas.before.clear()
+        with self.canvas.before:
+            pass
+            # if len(points) >= 2:
+            #     Color(0.95, 0.95, 0.95)
+            #     Line(points=points, width=1)
+            # for point in points:
+            #     Color(0.95, 0.95, 0.95)
+            #     psize = round(min(*graph_size) / 4)
+            #     Rectangle(
+            #         pos=(point[0] - psize//2, point[1] - psize//2),
+            #         size=(psize, psize)
+            #     )
+        if not self.tree.get_val().get("comment") is None:
+            self.comment_area.text = self.tree.get_val()["comment"]
+        else:
+            self.comment_area.text = str()
 
 class EngineControls:
     def __init__(self, parent):
@@ -726,10 +858,9 @@ class EngineControls:
         self.engine.send_command("boardsize {}".format(board.board_size))
         self.engine.send_command("komi {}".format(board.komi))
 
-        scoring_rule = self.parent.config.get("game")["rule"].lower()
-        if scoring_rule in ["japanese", "territory", "jp"]:
+        if board.scoring_rule == Board.SCORING_TERRITORY:
             self.engine.send_command("sayuri-setoption name scoring rule value {}".format("territory"))
-        elif scoring_rule in ["chinese", "area", "cn"]:
+        elif board.scoring_rule == Board.SCORING_AREA:
             self.engine.send_command("sayuri-setoption name scoring rule value {}".format("area"))
 
         leaf_tag = self.parent.tree.get_tag()
@@ -811,18 +942,33 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
         super(GamePanelWidget, self).__init__(**kwargs)
         self.board = Board(
             DefaultConfig.get("game")["size"],
-            DefaultConfig.get("game")["komi"]
-        )
+            DefaultConfig.get("game")["komi"],
+            Board.SCORING_AREA)
+        self.board.set_rule(
+            self.board.transform_scoring_rule(DefaultConfig.get("game")["rule"]))
         self.tree = Tree({ "board" : self.board.copy() })
 
         self.engine = EngineControls(self)
         self.analysis_mode = False
         self._bind()
 
+    def load_sgf(self, sgf):
+        try:
+            self.tree.copy_from(sgf_parser.load_sgf_as_tree(sgf, True))
+            self.board.copy_from(self.tree.get_val()["board"])
+            self.config.get("game")["size"] = self.board.board_size
+            self.config.get("game")["komi"] = self.board.komi
+            self.config.get("game")["rule"] = ["chinese", "japanese"][self.board.scoring_rule]
+            self.board_panel.draw_board()
+            self.engine.sync_engine_state()
+        except Exception:
+            pass
+
     def sync_config(self):
         self.board.reset(
             self.config.get("game")["size"],
-            self.config.get("game")["komi"])
+            self.config.get("game")["komi"],
+            self.board.transform_scoring_rule(self.config.get("game")["rule"]))
         self.tree.reset({ "board" : self.board.copy() })
         self.engine.sync_engine_state()
         self.board_panel.draw_board()
@@ -916,16 +1062,38 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
         self.back_only()
 
 class GameIOWidget(BoxLayout, BackgroundColor, Screen):
+    board = Board(19, 7.5, Board.SCORING_AREA)
+
     def __init__(self, **kwargs):
         super(GameIOWidget, self).__init__(**kwargs)
+        self.source = str()
+
+    def update_view_board(self, path):
+        self.source = path[0]
+        try:
+            with open(self.source, "r") as f:
+                sgf = f.read()
+            self.board.copy_from(sgf_parser.load_sgf_as_board(sgf, True))
+            self.simple_board_panel.redraw()
+        except Exception:
+            self.source = str()
+
+    def load(self):
+        try:
+            with open(self.source, "r") as f:
+                sgf = f.read()
+        except Exception:
+            sgf = None
+        self.manager.transition.direction = "left"
+        self.manager.current = "game"
+        if not sgf is None:
+            self.manager.get_screen(self.manager.current).load_sgf(sgf)
+        self.manager.get_screen(self.manager.current).canvas.ask_update()
 
     def back_only(self):
         self.manager.transition.direction = "left"
         self.manager.current = "game"
         self.manager.get_screen(self.manager.current).canvas.ask_update()
-
-    def confirm_and_back(self):
-        self.back_only()
 
 class WindowApp(App):
     def build(self):

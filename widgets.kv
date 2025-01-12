@@ -36,27 +36,28 @@
     background_color: 0.95, 0.95, 0.95, 1
     color: 0, 0, 0, 1
     text_size: self.size
-    halign: 'center'
-    valign: 'middle'
+    halign: "center"
+    valign: "middle"
 
 <StyledActionLabel@ActionLabel+RectangleBorder>:
     font_size: self.size[1] * 0.6
     color: 0.95, 0.95, 0.95, 1
     text_size: self.size
-    halign: 'center'
-    valign: 'middle'
+    halign: "center"
+    valign: "middle"
 
 <TextLabel@Label+BackgroundColor>:
     background_color: 0.95, 0.95, 0.95, 1
     color: 0, 0, 0, 1
     font_size: Theme.FONT_SIZE
     text_size: self.size[0] - cm(1), self.size[1] - cm(1)
-    halign: 'left'
-    valign: 'top'
+    halign: "left"
+    valign: "top"
 
 <BoardPanelWidget>:
     config: app.config
     manager: app.manager
+    lock_board: True
 
 <MenuPanelWidget>:
     orientation: "horizontal"
@@ -141,9 +142,21 @@
 
 <InfoPanelWidget>:
     opacity: 1
-    orientation: "horizontal"
+    orientation: "vertical"
     border_color: Theme.PANEL_LINE_COLOR.get()
     background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
+
+    tree_area: tree_area
+    comment_area: comment_area
+
+    Label:
+        id: tree_area
+        size_hint: 1, 0.15
+    TextLabel:
+        id: comment_area
+        size_hint: 1, 0.85
+        color: 0.95, 0.95, 0.95, 1
+        background_color: 0, 0, 0, 0
 
 <GamePanelWidget>:
     orientation: "vertical"
@@ -164,12 +177,13 @@
             Label:
                 size_hint: 1, 0.05
             GraphPanelWidget:
-                size_hint: 1, 0.35
+                size_hint: 1, 0.45
                 tree: root.tree
             Label:
                 size_hint: 1, 0.05
             InfoPanelWidget
-                size_hint: 1, 0.45
+                size_hint: 1, 0.35
+                tree: root.tree
             Label:
                 size_hint: 1, 0.1
         Label:
@@ -370,7 +384,7 @@
             valmax: root.config.get("game")["maxsize"]
             valmin: root.config.get("game")["minsize"]
             itemtext: "Size"
-            itemcolor: 0.95, 0.95, 0.95, 1
+            itemcolor: Theme.PANEL_LINE_COLOR.get()
             itembold: True
         Label:
             size_hint: 1, 0.05
@@ -380,7 +394,7 @@
             type: "float"
             valstep: 0.5
             itemtext: "Komi"
-            itemcolor: 0.95, 0.95, 0.95, 1
+            itemcolor: Theme.PANEL_LINE_COLOR.get()
             itembold: True
         Label:
             size_hint: 1, 0.05
@@ -389,7 +403,7 @@
             size_hint: 1, 0.1
             elemset: ["CN", "JP"]
             itemtext: "Rule"
-            itemcolor: 0.95, 0.95, 0.95, 1
+            itemcolor: Theme.PANEL_LINE_COLOR.get()
             itembold: True
         Label:
             size_hint: 1, 0.25
@@ -400,67 +414,72 @@
                 size_hint: 0.45, 1
                 icon: "img/check.png"
                 on_release: root.confirm_and_back()
-                border_color: 0.95, 0.95, 0.95, 1
+                border_color: Theme.PANEL_LINE_COLOR.get()
             Label:
                 size_hint: 0.1, 1
             StyledActionButton:
                 size_hint: 0.45, 1
                 icon: "img/cross.png"
                 on_release: root.back_only()
-                border_color: 0.95, 0.95, 0.95, 1
+                border_color: Theme.PANEL_LINE_COLOR.get()
         Label:
             size_hint: 1, 0.4
     Label:
         size_hint: 0.25, 1
 
+<SimpleBoardPanelWidget>:
+    border_color: Theme.PANEL_LINE_COLOR.get()
+
 <GameIOWidget>:
     background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
     orientation: "horizontal"
     config: app.config
+    simple_board_panel: simple_board_panel
 
     Label:
-        size_hint: 0.25, 1
+        size_hint: 0.05, 1
     BoxLayout:
-        orientation: "vertical"
         size_hint: 0.5, 1
+        orientation: "vertical"
         Label:
-            size_hint: 1, 0.1
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 0.3
-            StyledActionButton:
-                size_hint: 0.45, 1
-                text: "T1"
-                border_color: 0.95, 0.95, 0.95, 1
-            Label:
-                size_hint: 0.1, 1
-            StyledActionButton:
-                size_hint: 0.45, 1
-                text: "T2"
-                border_color: 0.95, 0.95, 0.95, 1
+            size_hint: 1, 0.25
+        SimpleBoardPanelWidget:
+            id: simple_board_panel
+            size_hint: 1, 0.5
+            board: root.board
         Label:
-            size_hint: 1, 0.05
-        BoxLayout:
-            orientation: "horizontal"
-            size_hint: 1, 0.3
-            StyledActionButton:
-                size_hint: 0.45, 1
-                text: "T3"
-                border_color: 0.95, 0.95, 0.95, 1
-            Label:
-                size_hint: 0.1, 1
-            StyledActionButton:
-                size_hint: 0.45, 1
-                text: "T4"
-                border_color: 0.95, 0.95, 0.95, 1
-        Label:
-            size_hint: 1, 0.05
-        StyledActionButton:
-            size_hint: 1, 0.1
-            icon: "img/check.png"
-            border_color: 0.95, 0.95, 0.95, 1
-            on_release: root.confirm_and_back()
-        Label:
-            size_hint: 1, 0.1
+            size_hint: 1, 0.25
     Label:
-        size_hint: 0.25, 1
+        size_hint: 0.05, 1
+    BoxLayout
+        size_hint: 0.35, 1
+        orientation: "vertical"
+        Label:
+            size_hint: 1, 0.2
+        FileChooserListView:
+            size_hint: 1, 0.4
+            id: filechooser
+            path: "."
+            on_submit: root.update_view_board(filechooser.selection)
+        Label:
+            size_hint: 1, 0.1
+        BoxLayout:
+            size_hint: 1, 0.1
+            size_hint_y: None
+            height: 30
+            StyledActionButton:
+                size_hint: 0.4, 1
+                text: "Cancel"
+                on_release: root.back_only()
+                border_color: Theme.PANEL_LINE_COLOR.get()
+            Label:
+                size_hint: 0.2, 1
+            StyledActionButton:
+                size_hint: 0.4, 1
+                text: "Load"
+                on_release: root.load()
+                border_color: Theme.PANEL_LINE_COLOR.get()
+        Label:
+            size_hint: 1, 0.2
+    Label:
+        size_hint: 0.05, 1

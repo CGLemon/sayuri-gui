@@ -42,8 +42,16 @@ class Node:
     def get_val(self):
         return self.val
 
+    def get_depth(self):
+        return self.depth
+
     def get_children_keys(self):
         return self.children.keys()
+
+    def get_children_val(self, key):
+        if self.children.get(key) is None:
+            return None
+        return self.children[key].get_val()
 
     def get_key(self):
         return self.key
@@ -104,3 +112,16 @@ class Tree:
             self.curr = self.curr.parent
             return True
         return False
+
+    def copy_from(self, other):
+        self.reset(other.root.get_val())
+        src_nodes = [ other.root ]
+        dst_nodes = [ self.root ]
+        while len(dst_nodes) > 0:
+            src = src_nodes.pop(-1)
+            dst = dst_nodes.pop(-1)
+            for key in src.get_children_keys():
+                dst.try_add_child(key, src.get_children_val(key))
+            for key in src.get_children_keys():
+                src_nodes.append(src.children[key])
+                dst_nodes.append(dst.children[key])

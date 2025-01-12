@@ -9,17 +9,17 @@ class Board:
     EMPTY = 2
     INVLD = 3
 
-    AREA = 0
-    TERRITORY = 1
+    SCORING_AREA = 0
+    SCORING_TERRITORY = 1
 
     PASS_VERTEX = 100 * 100
     RESIGN_VERTEX = 100 * 100 + 1
     NULL_VERTEX = 100 * 100 + 2
 
-    def __init__(self, board_size, komi):
-        self.reset(board_size, komi)
+    def __init__(self, board_size, komi, scoring_rule):
+        self.reset(board_size, komi, scoring_rule)
 
-    def reset(self, board_size, komi):
+    def reset(self, board_size, komi, scoring_rule):
         self.board_size = board_size
         self.num_intersections = self.board_size ** 2
         self.num_vertices = (self.board_size+2) ** 2
@@ -40,9 +40,13 @@ class Board:
         self.prisoners = [0, 0]
         self.invert_color_map = [self.WHITE, self.BLACK, self.EMPTY, self.INVLD]
         self.dir4 = [1, self.board_size+2, -1, -(self.board_size+2)]
+        self.scoring_rule = scoring_rule
+
+    def set_rule(self, scoring_rule):
+        self.scoring_rule = scoring_rule
 
     def copy(self):
-        cp_board = Board(self.board_size, self.komi)
+        cp_board = Board(self.board_size, self.komi, self.scoring_rule)
         cp_board.num_passes = self.num_passes
         cp_board.num_move = self.num_move
         cp_board.komi = self.komi
@@ -55,7 +59,7 @@ class Board:
         return cp_board
 
     def copy_from(self, other):
-        self.reset(other.board_size, other.komi)
+        self.reset(other.board_size, other.komi, other.scoring_rule)
         self.num_passes = other.num_passes
         self.num_move = other.num_move
         self.komi = other.komi
@@ -165,7 +169,7 @@ class Board:
         for x, y in [ self.index_to_xy(idx) for idx in range(self.num_intersections)]:
             color = self.get_stone((x,y))
             if not self.deadmark[self.get_vertex(x,y)] \
-                   and color in [Board.BLACK, Board.WHITE]:
+                   and color in [self.BLACK, self.WHITE]:
                 stones_coord.append((color, x, y))
         return stones_coord
 
@@ -174,7 +178,7 @@ class Board:
         for x, y in [ self.index_to_xy(idx) for idx in range(self.num_intersections)]:
             color = self.get_stone((x,y))
             if self.deadmark[self.get_vertex(x,y)] \
-                   and color in [Board.BLACK, Board.WHITE]:
+                   and color in [self.BLACK, self.WHITE]:
                 deadstones_coord.append((color, x, y))
         return deadstones_coord
 
@@ -244,6 +248,25 @@ class Board:
             else:
                 territory[color] += 1
         return territory, stones, prisoners
+
+    def compute_finalscore(self, color):
+        territory, stones, prisoners = self.get_finalscore_statistics()
+        scores = [0, 0]
+
+        if self.scoring_rule == self.SCORING_AREA:
+            scores = [
+                territory[self.BLACK] + stones[self.BLACK] - self.komi,
+                territory[self.WHITE] + stones[self.WHITE]
+            ]
+        elif self.scoring_rule == self.SCORING_TERRITORY:
+            scores = [
+                territory[self.BLACK] + prisoners[self.BLACK] - self.komi,
+                territory[self.WHITE] + prisoners[self.WHITE]
+            ]
+        blackscore = scores[self.BLACK] - scores[self.WHITE]
+        if self._get_fancy_color(color) == self.WHITE:
+            return -blackscore
+        return blackscore
 
     def _update_board(self, vtx):
         self.state[vtx] = self.to_move
@@ -327,6 +350,18 @@ class Board:
             return GtpVertex(GtpVertex.RESIGN_VERTEX)
         return GtpVertex(self.vertex_to_xy(vtx))
 
+    def transform_scoring_rule(self, scoring):
+        if isinstance(scoring, int):
+            return ["chinese", "japanese"][scoring]
+        elif isinstance(scoring, str):
+            default = self.SCORING_AREA
+            if scoring.lower() in ["chinese", "area", "cn"]:
+                return self.SCORING_AREA
+            elif scoring.lower() in ["japanese", "territory", "jp"]:
+                return self.SCORING_TERRITORY
+            return default
+        raise Exception("Scoring should be int/str.")
+
     def get_index(self, x, y):
         return y * self.board_size + x
 
@@ -374,4 +409,5 @@ class Board:
         out += "To Move: {}\n".format("Black" if self.to_move == self.BLACK else "White")
         out += "Num Passes: {}\n".format(self.num_passes)
         out += "Num Move: {}\n".format(self.num_move)
+        out += "Rule: {}\n".format(self.transform_scoring_rule(self.scoring_rule))
         return out
