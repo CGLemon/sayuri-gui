@@ -584,36 +584,7 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
         super(GraphPanelWidget, self).__init__(**kwargs)
         self.event = Clock.schedule_interval(self.draw_graph, 0.2)
 
-    def _get_stats_history(self, pathinfo):
-        blackwinrate, blackscore, drawrate, first_stats = None, None, None, None
-        stats_history = list()
-        for i, (board, info) in enumerate(pathinfo):
-            col = board.get_gtp_color(board.to_move)
-            if not info is None:
-                blackwinrate = info["winrate"] if col.is_black() else 1.0 - info["winrate"]
-                blackscore = info["scorelead"] if col.is_black() else -info["scorelead"]
-                drawrate = info["drawrate"]
-            bestmove = None if info is None else info["move"]
-            stats_history.append(
-                {"blackwinrate" : blackwinrate,
-                 "blackscore" : blackscore,
-                 "drawrate" : drawrate,
-                 "bestmove" : bestmove}
-            )
-            if first_stats is None and not blackwinrate is None:
-                first_stats = stats_history[-1]
-        if first_stats is None:
-            stats_history.clear()
-        else:
-            for stats in stats_history:
-                if stats["blackwinrate"] is None:
-                    for key in stats.keys():
-                        stats[key] = first_stats[key]
-                else:
-                    break
-        return stats_history
-
-    def draw_graph(self, *args):
+    def _get_stats_history(self):
         pathinfo = list()
         for node in self.tree.get_root_mainpath():
             analysis = node.get_val().get("analysis")
@@ -622,24 +593,42 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
                 pathinfo.append((board, analysis.get_sorted_moves()[0]))
             else:
                 pathinfo.append((board, None))
+        depth = min(self.tree.get_depth(), len(pathinfo) - 1)
 
-        while len(pathinfo) > 0 and pathinfo[-1][1] is None:
-            pathinfo.pop(-1)
+        blackwinrate, blackscore, drawrate, no_stats = 0.5, 0.0, 1.0, True
+        stats_history = list()
+        for board, info in reversed(pathinfo):
+            col = board.get_gtp_color(board.to_move)
+            if not info is None:
+                blackwinrate = info["winrate"] if col.is_black() else 1.0 - info["winrate"]
+                blackscore = info["scorelead"] if col.is_black() else -info["scorelead"]
+                drawrate = info["drawrate"]
+                no_stats &= False
+            bestmove = None if info is None else info["move"]
+            stats_history.append(
+                {"blackwinrate" : blackwinrate,
+                 "blackscore" : blackscore,
+                 "drawrate" : drawrate,
+                 "bestmove" : bestmove,
+                 "valid" : not no_stats}
+            )
+        stats_history.reverse()
+        return stats_history, depth
 
-        stats_history = self._get_stats_history(pathinfo)
-        depth = max(min(self.tree.get_depth(), len(stats_history) - 1), 0)
-
+    def draw_graph(self, *args):
+        stats_history, depth = self._get_stats_history()
         self.canvas.clear()
         with self.canvas:
             margin = 0.1
             graph_pos = (self.pos[0],  self.pos[1] + self.height * margin)
             graph_size = (self.width, self.height * (1.0 - margin))
 
-            mw = graph_size[0] / max(len(pathinfo), 1)
-            points = list()
+            mw = graph_size[0] / max(len(stats_history), 1)
+            winrate_points = list()
 
             for i, stats in enumerate(stats_history):
-                blackwinrate, drawrate = stats["blackwinrate"], stats["drawrate"]
+                blackwinrate, drawrate, valid =\
+                    stats["blackwinrate"], stats["drawrate"], stats["valid"]
                 wdl_rate = [
                     blackwinrate - drawrate/2,
                     blackwinrate + drawrate/2
@@ -650,50 +639,47 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
                     graph_pos[1] + round(wdl_rate[1] * graph_size[1]),
                     graph_pos[1] + graph_size[1]
                 ]
-                Color(*Theme.BLACK_WINRATE_COLOR.get())
-                Rectangle(
-                    pos=(graph_pos[0] + mw * i, wdl_ypos[0]),
-                    size=(mw, wdl_ypos[1] - wdl_ypos[0])
-                )
-                Color(*Theme.DRAWRATE_COLOR.get())
-                Rectangle(
-                    pos=(graph_pos[0] + mw * i, wdl_ypos[1]),
-                    size=(mw, wdl_ypos[2] - wdl_ypos[1])
-                )
-                Color(*Theme.WHITE_WINRATE_COLOR.get())
-                Rectangle(
-                    pos=(graph_pos[0] + mw * i, wdl_ypos[2]),
-                    size=(mw, wdl_ypos[3] - wdl_ypos[2])
-                )
                 p0 = graph_pos[0] + round(mw * (i + 0.5))
-                points.append(
-                    (p0, graph_pos[1] + round(blackwinrate * graph_size[1]))
-                )
+                if valid:
+                    Color(*Theme.BLACK_WINRATE_COLOR.get())
+                    Rectangle(
+                        pos=(graph_pos[0] + mw * i, wdl_ypos[0]),
+                        size=(mw, wdl_ypos[1] - wdl_ypos[0])
+                    )
+                    Color(*Theme.DRAWRATE_COLOR.get())
+                    Rectangle(
+                        pos=(graph_pos[0] + mw * i, wdl_ypos[1]),
+                        size=(mw, wdl_ypos[2] - wdl_ypos[1])
+                    )
+                    Color(*Theme.WHITE_WINRATE_COLOR.get())
+                    Rectangle(
+                        pos=(graph_pos[0] + mw * i, wdl_ypos[2]),
+                        size=(mw, wdl_ypos[3] - wdl_ypos[2])
+                    )
+                    winrate_points.append(
+                        (p0, graph_pos[1] + round(blackwinrate * graph_size[1]))
+                    )
                 if depth == i:
                     Color(*Theme.WINRATE_AUX_LINE_COLOR.get())
-                    Line(points=[(p0, graph_pos[1]), (p0, graph_pos[1] + graph_size[1])], width=1.5)
-            if len(points) >= 2:
+                    Line(points=[(p0, graph_pos[1]), (p0, graph_pos[1] + graph_size[1])],
+                         width=1.5)
+            if len(winrate_points) >= 2:
                 Color(*Theme.WINRATE_LINE_COLOR.get())
-                Line(points=points, width=1.5)
+                Line(points=winrate_points, width=1.5)
             if len(stats_history) > 0:
                 stats = stats_history[depth]
                 front_size = round(min(self.width, self.height * margin)/2)
                 text_str = "Move {}: B {:.2f}% ({:.1f})".format(
                     stats["bestmove"] if stats["bestmove"] else "null",
                     stats["blackwinrate"] * 100, stats["blackscore"])
-                draw_text(
-                    pos=(self.pos[0] + self.width/2, self.pos[1] + front_size),
-                    text=text_str,
-                    color=(0.95, 0.95, 0.95),
-                    font_size=front_size)
             else:
                 front_size = round(min(self.width, self.height * margin)/2)
                 text_str = "Move {}: B {:.2f}% ({:.1f})".format("null", 50.0, 0)
-                draw_text(
-                    pos=(self.pos[0] + self.width/2, self.pos[1] + front_size),
-                    text=text_str,
-                    color=(0.95, 0.95, 0.95),
-                    font_size=front_size)
+            draw_text(
+                pos=(self.pos[0] + self.width/2, self.pos[1] + front_size),
+                text=text_str,
+                color=(0.95, 0.95, 0.95),
+                font_size=front_size)
 
 class InfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
