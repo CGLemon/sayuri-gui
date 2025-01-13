@@ -68,14 +68,15 @@ class SimpleBoardPanelWidget(RectangleBorder):
             Ellipse(pos=(self.gridpos_x[x] - r, self.gridpos_y[y] - r), size=(2 * r, 2 * r))
 
     def on_size(self, *args):
-        self.redraw()
+        self.draw_board_only()
+        self.draw_stone_on_board()
 
-    def redraw(self, *args):
+    def draw_board_only(self):
         board_size = self.board.board_size
         X_LABELS = self.board.X_LABELS
 
-        self.canvas.clear()
-        with self.canvas:
+        self.canvas.before.clear()
+        with self.canvas.before:
             # board rectangle
             square_size = min(self.width, self.height)
             rect_pos = (self.center_x - square_size/2, self.center_y - square_size/2)
@@ -119,6 +120,9 @@ class SimpleBoardPanelWidget(RectangleBorder):
                     color=(0.25, 0.25, 0.25),
                     font_size=self.grid_size / 1.5)
 
+    def draw_stone_on_board(self):
+        self.canvas.clear()
+        with self.canvas:
             # stones on board
             stone_colors = Theme.STONE_COLORS
             laststone_colors = Theme.LAST_COLORS
@@ -135,8 +139,7 @@ class SimpleBoardPanelWidget(RectangleBorder):
                 if self.board.is_last_move((x,y)):
                     self.draw_circle(x, y, laststone_colors[color].get(), scale=0.35)
 
-
-class BoardPanelWidget(Widget):
+class BoardPanelWidget(SimpleBoardPanelWidget):
     def __init__(self, **kwargs):
         super(BoardPanelWidget, self).__init__(**kwargs)
         Window.bind(mouse_pos=self.on_mouse_pos)
@@ -223,7 +226,7 @@ class BoardPanelWidget(Widget):
                 self.tree.update_tag()
 
     def on_size(self, *args):
-        self.draw_board()
+        self.draw_board_only()
         self.last_board_content_tag = None
 
     def handle_play_move(self, col, vtx):
@@ -261,55 +264,6 @@ class BoardPanelWidget(Widget):
         Color(*color)
         sz = self.grid_size * scale
         Rectangle(pos=(self.gridpos_x[x] - sz/2, self.gridpos_y[y] - sz/2), size=(sz, sz))
-
-    def draw_board(self, *args):
-        board_size = self.board.board_size
-        X_LABELS = self.board.X_LABELS
-
-        self.canvas.before.clear()
-        with self.canvas.before:
-            # board rectangle
-            square_size = min(self.width, self.height)
-            rect_pos = (self.center_x - square_size/2, self.center_y - square_size/2)
-            Color(*Theme.BOARD_COLOR.get())
-            board_rect = Rectangle(pos=rect_pos, size=(square_size, square_size))
-
-            # grid lines
-            margin = Theme.BOARD_MARGIN
-            self.grid_size = board_rect.size[0] / (board_size - 1 + 1.5 * margin)
-            self.stone_size = self.grid_size * Theme.STONE_SIZE
-            self.gridpos = [math.floor((margin + i) * self.grid_size + 0.5) for i in range(board_size)]
-            self.gridpos_x = [v + board_rect.pos[0] for v in self.gridpos]
-            self.gridpos_y = [v + board_rect.pos[1] for v in self.gridpos]
-
-            line_color = Theme.LINE_COLOR
-            Color(*line_color.get())
-            lo_x, hi_x = self.gridpos_x[0], self.gridpos_x[-1]
-            lo_y, hi_y = self.gridpos_y[0], self.gridpos_y[-1]
-            for i in range(board_size):
-                Line(points=[(self.gridpos_x[i], lo_y), (self.gridpos_x[i], hi_y)])
-                Line(points=[(lo_x, self.gridpos_y[i]), (hi_x, self.gridpos_y[i])])
-
-            # star points
-            star_scale = (self.grid_size/self.stone_size) * Theme.STARPOINT_SIZE
-            for x, y in [ (idx % board_size, idx // board_size) for idx in range(board_size * board_size)]:
-                if self.board.is_star((x,y)):
-                    self.draw_circle(
-                        x, y, line_color.get(), scale=star_scale)
-
-            # coordinates
-            lo = self.gridpos[0]
-            for i in range(board_size):
-                draw_text(
-                    pos=(self.gridpos_x[i], lo_y - lo / 2),
-                    text=X_LABELS[i],
-                    color=(0.25, 0.25, 0.25),
-                    font_size=self.grid_size / 1.5)
-                draw_text(
-                    pos=(lo_x - lo / 2, self.gridpos_y[i]),
-                    text=str(i + 1),
-                    color=(0.25, 0.25, 0.25),
-                    font_size=self.grid_size / 1.5)
 
     def draw_board_contents(self, *args):
         curr_tag = self.tree.get_tag()
@@ -959,7 +913,7 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
             self.config.get("game")["size"] = self.board.board_size
             self.config.get("game")["komi"] = self.board.komi
             self.config.get("game")["rule"] = ["chinese", "japanese"][self.board.scoring_rule]
-            self.board_panel.draw_board()
+            self.board_panel.on_size() # redraw
             self.engine.sync_engine_state()
         except Exception:
             pass
@@ -970,8 +924,8 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
             self.config.get("game")["komi"],
             self.board.transform_scoring_rule(self.config.get("game")["rule"]))
         self.tree.reset({ "board" : self.board.copy() })
+        self.board_panel.on_size() # redraw
         self.engine.sync_engine_state()
-        self.board_panel.draw_board()
 
     def _bind(self):
         self.keyboard = Window.request_keyboard(None, self, "")
@@ -1074,7 +1028,7 @@ class GameIOWidget(BoxLayout, BackgroundColor, Screen):
             with open(self.source, "r") as f:
                 sgf = f.read()
             self.board.copy_from(sgf_parser.load_sgf_as_board(sgf, True))
-            self.simple_board_panel.redraw()
+            self.simple_board_panel.on_size()
         except Exception:
             self.source = str()
 

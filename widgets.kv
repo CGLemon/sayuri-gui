@@ -57,7 +57,6 @@
 <BoardPanelWidget>:
     config: app.config
     manager: app.manager
-    lock_board: True
 
 <MenuPanelWidget>:
     orientation: "horizontal"
@@ -427,9 +426,6 @@
     Label:
         size_hint: 0.25, 1
 
-<SimpleBoardPanelWidget>:
-    border_color: Theme.PANEL_LINE_COLOR.get()
-
 <GameIOWidget>:
     background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
     orientation: "horizontal"
@@ -446,6 +442,7 @@
         SimpleBoardPanelWidget:
             id: simple_board_panel
             size_hint: 1, 0.5
+            border_color: Theme.PANEL_LINE_COLOR.get()
             board: root.board
         Label:
             size_hint: 1, 0.25
