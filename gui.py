@@ -582,18 +582,17 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
 class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
         super(GraphPanelWidget, self).__init__(**kwargs)
-        self.event = Clock.schedule_interval(self.draw_graph, 0.2)
 
-    def _get_stats_history(self):
+    def _get_stats_history(self, tree):
         pathinfo = list()
-        for node in self.tree.get_root_mainpath():
+        for node in tree.get_root_mainpath():
             analysis = node.get_val().get("analysis")
             board = node.get_val()["board"]
             if not analysis is None:
                 pathinfo.append((board, analysis.get_sorted_moves()[0]))
             else:
                 pathinfo.append((board, None))
-        depth = min(self.tree.get_depth(), len(pathinfo) - 1)
+        depth = min(tree.get_depth(), len(pathinfo) - 1)
 
         blackwinrate, blackscore, drawrate, no_stats = 0.5, 0.0, 1.0, True
         stats_history = list()
@@ -615,8 +614,8 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
         stats_history.reverse()
         return stats_history, depth
 
-    def draw_graph(self, *args):
-        stats_history, depth = self._get_stats_history()
+    def update_graph(self, tree):
+        stats_history, depth = self._get_stats_history(tree)
         self.canvas.clear()
         with self.canvas:
             margin = 0.1
@@ -681,17 +680,16 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
                 color=(0.95, 0.95, 0.95),
                 font_size=front_size)
 
-class InfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
+class CommentPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
-        super(InfoPanelWidget, self).__init__(**kwargs)
-        self.event = Clock.schedule_interval(self.update_comment, 0.1)
+        super(CommentPanelWidget, self).__init__(**kwargs)
         self.last_board_content_tag = None
 
     def on_size(self, *args):
         self.last_board_content_tag = None
 
-    def update_comment(self, *args):
-        curr_tag = self.tree.get_tag()
+    def update_comment(self, tree):
+        curr_tag = tree.get_tag()
         if self.last_board_content_tag == curr_tag:
             return
         self.last_board_content_tag = curr_tag
@@ -706,7 +704,7 @@ class InfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
         ]
 
         nodes = 0
-        for node in self.tree.get_root_mainpath():
+        for node in tree.get_root_mainpath():
             nodes += 1
         nodes = min(nodes, 10)
         points = list()
@@ -734,10 +732,19 @@ class InfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
             #         pos=(point[0] - psize//2, point[1] - psize//2),
             #         size=(psize, psize)
             #     )
-        if not self.tree.get_val().get("comment") is None:
-            self.comment_area.text = self.tree.get_val()["comment"]
+        if not tree.get_val().get("comment") is None:
+            self.comment_area.text = tree.get_val()["comment"]
         else:
             self.comment_area.text = str()
+
+class InfoPanelWidget(BoxLayout):
+    def __init__(self, **kwargs):
+        super(InfoPanelWidget, self).__init__(**kwargs)
+        self.event = Clock.schedule_interval(self.update_info, 0.2)
+
+    def update_info(self, *args):
+        self.graph_panel.update_graph(self.tree)
+        self.comment_panel.update_comment(self.tree)
 
 class EngineControls:
     def __init__(self, parent):

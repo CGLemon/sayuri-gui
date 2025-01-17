@@ -59,16 +59,21 @@
     manager: app.manager
 
 <MenuPanelWidget>:
-    orientation: "horizontal"
+    orientation: "vertical"
     background_color: Theme.DEFAULT_MENU_COLOR.get()
     manager: app.manager
 
-    StyledActionButton:
-        icon: "img/menu-burger.png"
-        size_hint: 0.075, 1
-        on_release: root.switch_to_gameio()
     Label:
-        size_hint: 0.925, 1
+        size_hint: 1, 0.15
+    BoxLayout:
+        StyledActionButton:
+            icon: "img/download.png"
+            size_hint: 0.075, 1
+            on_release: root.switch_to_gameio()
+        Label:
+            size_hint: 0.925, 1
+    Label:
+        size_hint: 1, 0.15
 
 <ControlsPanelWidget>:
     orientation: "vertical"
@@ -139,7 +144,7 @@
     border_color: Theme.PANEL_LINE_COLOR.get()
     background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
 
-<InfoPanelWidget>:
+<CommentPanelWidget>:
     opacity: 1
     orientation: "vertical"
     border_color: Theme.PANEL_LINE_COLOR.get()
@@ -157,6 +162,26 @@
         color: 0.95, 0.95, 0.95, 1
         background_color: 0, 0, 0, 0
 
+<InfoPanelWidget>
+    orientation: "vertical"
+    graph_panel: graph_panel
+    comment_panel: comment_panel
+
+    Label:
+        size_hint: 1, 0.05
+    GraphPanelWidget:
+        id: graph_panel
+        size_hint: 1, 0.45
+        tree: self.tree
+    Label:
+        size_hint: 1, 0.05
+    CommentPanelWidget
+        id: comment_panel
+        size_hint: 1, 0.35
+        tree: self.tree
+    Label:
+        size_hint: 1, 0.1
+
 <GamePanelWidget>:
     orientation: "vertical"
     background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
@@ -170,21 +195,9 @@
         size_hint: 1, 0.9
         Label:
             size_hint: 0.02, 1
-        BoxLayout:
-            orientation: "vertical"
+        InfoPanelWidget:
             size_hint: 0.25, 1
-            Label:
-                size_hint: 1, 0.05
-            GraphPanelWidget:
-                size_hint: 1, 0.45
-                tree: root.tree
-            Label:
-                size_hint: 1, 0.05
-            InfoPanelWidget
-                size_hint: 1, 0.35
-                tree: root.tree
-            Label:
-                size_hint: 1, 0.1
+            tree: root.tree
         Label:
             size_hint: 0.02, 1
         BoardPanelWidget:
@@ -195,12 +208,7 @@
             engine: root.engine
             game: root
         Label:
-            size_hint: 0.02, 1
-        BoxLayout:
-            orientation: "vertical"
-            size_hint: 0.25, 1
-        Label:
-            size_hint: 0.02, 1
+            size_hint: 0.05, 1
     ControlsPanelWidget:
         size_hint: 1, 0.05
         board: root.board
