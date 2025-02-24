@@ -747,9 +747,14 @@ class InfoPanelWidget(BoxLayout):
         self.comment_panel.update_comment(self.tree)
 
 class EngineControls:
+    MODE_IDLE = 0
+    MODE_ANALYZIN = 1
+    MODE_PLAYING = 2
+
     def __init__(self, parent):
         self.parent = parent
         self.engine = None
+        self.mode = self.MODE_IDLE
         command = self._get_command()
         try:
             if not command is None:
@@ -837,6 +842,10 @@ class EngineControls:
             self.analyzing = True
         elif action["action"] == "stop-analyze":
             gtp_command = "protocol_version"
+        elif action["action"] == "genmove":
+            col = action["color"]
+            gtp_command = "sayuri-genmove_analyze {} playouts {}".format(
+                              col, 400)
         else:
             return
 
@@ -863,11 +872,11 @@ class EngineControls:
         if self.analyzing and last_line:
             self.parent.tree.get_val()["analysis"] = AnalysisParser(last_line["data"])
             self.parent.tree.update_tag()
-            if not self.parent.analysis_mode:
+            if not self.mode == self.MODE_ANALYZIN:
                 self.parent.engine.do_action({ "action" : "stop-analyze" })
 
         if not self.analyzing and \
-               self.parent.analysis_mode and \
+               self.mode == self.MODE_ANALYZIN and \
                not "analyze" in self.last_rep_command:
             col = self.parent.board.get_gtp_color(self.parent.board.to_move)
             self.parent.engine.do_action({ "action" : "analyze", "color" : col })
@@ -890,13 +899,10 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
         self.board = Board(
             DefaultConfig.get("game")["size"],
             DefaultConfig.get("game")["komi"],
-            Board.SCORING_AREA)
-        self.board.set_rule(
-            self.board.transform_scoring_rule(DefaultConfig.get("game")["rule"]))
+            DefaultConfig.get("game")["rule"])
         self.tree = Tree({ "board" : self.board.copy() })
 
         self.engine = EngineControls(self)
-        self.analysis_mode = False
         self._bind()
 
     def load_sgf(self, sgf):
@@ -915,7 +921,7 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
         self.board.reset(
             self.config.get("game")["size"],
             self.config.get("game")["komi"],
-            self.board.transform_scoring_rule(self.config.get("game")["rule"]))
+            self.config.get("game")["rule"])
         self.tree.reset({ "board" : self.board.copy() })
         self.board_panel.on_size() # redraw
         self.engine.sync_engine_state()
@@ -926,7 +932,10 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
 
     def on_keyboard_down(self, keyboard, keycode, text, modifiers):
         if keycode[1] == "a" or keycode[1] == "spacebar":
-            self.analysis_mode ^= True
+            if self.engine.mode == self.engine.MODE_IDLE:
+                self.engine.mode = self.engine.MODE_ANALYZIN
+            elif self.engine.mode == self.engine.MODE_ANALYZIN:
+                self.engine.mode = self.engine.MODE_IDLE
         return True
 
 class GameAnalysisWidget(BoxLayout, BackgroundColor, Screen):
@@ -975,6 +984,7 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
         super(GameSettingWidget, self).__init__(**kwargs)
 
     def sync_config(self):
+        self.comp_side_bar.elem_label.text = str(self.config.get("game")["comp"])
         self.board_size_bar.value_label.text = str(self.config.get("game")["size"])
         self.komi_bar.value_label.text = str(self.config.get("game")["komi"])
 
@@ -985,6 +995,7 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
             self.rule_bar.elem_label.text = "CN"
 
         all_bars = [
+            self.comp_side_bar,
             self.rule_bar
         ]
         for bar in all_bars:
@@ -1002,6 +1013,7 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
         self.manager.get_screen(self.manager.current).canvas.ask_update()
 
     def confirm_and_back(self):
+        self.config.get("game")["comp"] = self.comp_side_bar.elem_label.text
         self.config.get("game")["size"] = int(self.board_size_bar.value_label.text)
         self.config.get("game")["komi"] = float(self.komi_bar.value_label.text)
         self.config.get("game")["rule"] = self.rule_bar.elem_label.text

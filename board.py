@@ -40,10 +40,7 @@ class Board:
         self.prisoners = [0, 0]
         self.invert_color_map = [self.WHITE, self.BLACK, self.EMPTY, self.INVLD]
         self.dir4 = [1, self.board_size+2, -1, -(self.board_size+2)]
-        self.scoring_rule = scoring_rule
-
-    def set_rule(self, scoring_rule):
-        self.scoring_rule = scoring_rule
+        self.scoring_rule = self._get_fancy_scoring_rule(scoring_rule)
 
     def copy(self):
         cp_board = Board(self.board_size, self.komi, self.scoring_rule)
@@ -311,6 +308,18 @@ class Board:
                 elif self.state[svtx] == self.EMPTY:
                     surround_vtx.add(svtx)
         return string_vtx, surround_vtx
+
+    def _get_fancy_scoring_rule(self, scoring):
+        if isinstance(scoring, int):
+            return scoring
+        elif isinstance(scoring, str):
+            default = self.SCORING_AREA
+            if scoring.lower() in ["chinese", "area", "cn"]:
+                return self.SCORING_AREA
+            elif scoring.lower() in ["japanese", "territory", "jp"]:
+                return self.SCORING_TERRITORY
+            return default
+        raise Exception("Scoring should be int/str.")
 
     def _get_fancy_color(self, color):
         if color is None or \

@@ -195,9 +195,9 @@
         size_hint: 1, 0.9
         Label:
             size_hint: 0.02, 1
-        InfoPanelWidget:
-            size_hint: 0.25, 1
-            tree: root.tree
+        # InfoPanelWidget:
+        #     size_hint: 0.25, 1
+        #     tree: root.tree
         Label:
             size_hint: 0.02, 1
         BoardPanelWidget:
@@ -373,6 +373,7 @@
 <GameSettingWidget>:
     background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
     orientation: "horizontal"
+    comp_side_bar: comp_side_bar
     board_size_bar: board_size_bar
     komi_bar: komi_bar
     rule_bar: rule_bar
@@ -385,6 +386,15 @@
         size_hint: 0.5, 1
         Label:
             size_hint: 1, 0.4
+        ElementSelectBar:
+            id: comp_side_bar
+            size_hint: 1, 0.1
+            elemset: ["NA", "B", "W"]
+            itemtext: "Comp"
+            itemcolor: Theme.PANEL_LINE_COLOR.get()
+            itembold: True
+        Label:
+            size_hint: 1, 0.05
         NumberSelectBar:
             id: board_size_bar
             size_hint: 1, 0.1
