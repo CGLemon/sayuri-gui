@@ -267,7 +267,7 @@ class GTPEnginePipe:
 
                     main_command = handling_query.get_main_command()
                     if len(main_command.split("-")) <= 2 and \
-                           main_command.split("-")[-1] in ["analyze", "analyze_genmove"]:
+                           main_command.split("-")[-1] in ["analyze", "genmove_analyze"]:
                         receiving_analysis = True
                 except queue.Empty:
                     continue

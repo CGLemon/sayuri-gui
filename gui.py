@@ -147,6 +147,7 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
         self.forbid_pv = False
         self.ghost_stone = None
         self.last_board_content_tag = None
+        self.wait_for_comp_move = False
         self.event = Clock.schedule_interval(self.draw_board_contents, 0.025)
 
     def on_mouse_pos(self, *args): # https://gist.github.com/opqopq/15c707dc4cffc2b6455f
@@ -171,6 +172,8 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
                 self.tree.update_tag()
 
     def on_touch_down(self, touch):
+        if self.should_lock_board():
+            return
         if "button" in touch.profile and touch.button == "right":
             self.forbid_pv = True
             if self.pv_start_pos:
@@ -187,23 +190,16 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
             if prev_ghost != self.ghost_stone:
                 self.tree.update_tag()
         if "button" in touch.profile and touch.button == "scrolldown":
-            succ = self.tree.backward()
-            if succ:
-                self.board.copy_from(self.tree.get_val()["board"])
-                self.engine.do_action({ "action" : "undo" })
+            self.undo_move()
         if "button" in touch.profile and touch.button == "scrollup":
-            succ = self.tree.forward()
-            if succ:
-                col, vtx = self.tree.get_key().unpack()
-                self.board.copy_from(self.tree.get_val()["board"])
-                self.engine.do_action(
-                    { "action" : "play", "color" : col, "vertex" : vtx }
-                )
+            self.redo_move()
 
     def on_touch_move(self, touch): # on_motion on_touch_move
         return self.on_touch_down(touch)
 
     def on_touch_up(self, touch):
+        if self.should_lock_board():
+            return
         if "button" in touch.profile and touch.button == "right":
             self.forbid_pv = False
             if self.pv_start_pos:
@@ -228,6 +224,46 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
     def on_size(self, *args):
         self.draw_board_only()
         self.last_board_content_tag = None
+
+    def undo_move(self):
+        succ = self.tree.backward()
+        if succ:
+            self.board.copy_from(self.tree.get_val()["board"])
+            self.engine.do_action({ "action" : "undo" })
+        return succ
+
+    def redo_move(self):
+        succ = self.tree.forward()
+        if succ:
+            col, vtx = self.tree.get_key().unpack()
+            self.board.copy_from(self.tree.get_val()["board"])
+            self.engine.do_action(
+                { "action" : "play", "color" : col, "vertex" : vtx }
+            )
+        return succ
+
+    def should_lock_board(self):
+        self.comp_side = self.config.get("game")["comp"]
+        if self.comp_side.lower() == "na":
+            return False
+        if self.comp_side.lower() == "b" and \
+               self.board.to_move == Board.BLACK:
+            return True
+        if self.comp_side.lower() == "w" and \
+               self.board.to_move == Board.WHITE:
+            return True
+        return False
+
+
+    def acquire_comp_move(self):
+        if not self.should_lock_board():
+            return
+        if not self.wait_for_comp_move:
+            col = self.board.get_gtp_color(self.board.to_move)
+            self.engine.do_action(
+                { "action" : "genmove", "color" : col}
+            )
+            self.wait_for_comp_move = True
 
     def handle_play_move(self, col, vtx):
         self.engine.do_action(
@@ -266,16 +302,27 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
         Rectangle(pos=(self.gridpos_x[x] - sz/2, self.gridpos_y[y] - sz/2), size=(sz, sz))
 
     def draw_board_contents(self, *args):
+        self.acquire_comp_move()
+
         curr_tag = self.tree.get_tag()
         if self.last_board_content_tag == curr_tag:
             return
         self.last_board_content_tag = curr_tag
         board = self.tree.get_val()["board"]
 
+        # handle computer move first and redraw the board next time
+        compvtx = self.tree.get_val().get("move")
+        if self.should_lock_board() and compvtx:
+            self.handle_play_move(
+                self.board.get_gtp_color(self.board.to_move), compvtx)
+            self.wait_for_comp_move = False
+            return
+
         # synchronize PV board
         forbid_pv = self.forbid_pv or \
                         not self.config.get("engine")["pv"]
         analysis = self.tree.get_val().get("analysis")
+        print(analysis)
         show_pv_board = not forbid_pv and \
                             not self.pv_start_pos is None and \
                             board.get_stone(self.pv_start_pos) == Board.EMPTY and \
@@ -550,34 +597,27 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
 
     def undo(self, t=1):
         for _ in range(t):
-            succ = self.tree.backward()
-            if not succ:
+            if not self.board_panel.undo_move():
                 break
-            self.board.copy_from(self.tree.get_val()["board"])
-            self.engine.do_action({ "action" : "undo" })
 
     def redo(self, t=1):
         for _ in range(t):
-            succ = self.tree.forward()
-            if not succ:
+            if not self.board_panel.redo_move():
                 break
-            col, vtx = self.tree.get_key().unpack()
-            self.board.copy_from(self.tree.get_val()["board"])
-            self.engine.do_action(
-                { "action" : "play", "color" : col, "vertex" : vtx }
-            )
 
     def switch_to_gamesetting(self):
         self.manager.transition.direction = "right"
         self.manager.current = "game-setting"
         self.manager.get_screen(self.manager.current).sync_config()
         self.manager.get_screen(self.manager.current).canvas.ask_update()
+        self.engine.change_mode(EngineControls.MODE_IDLE)
 
     def switch_to_gameanalysis(self):
         self.manager.transition.direction = "right"
         self.manager.current = "game-analysis"
         self.manager.get_screen(self.manager.current).sync_config()
         self.manager.get_screen(self.manager.current).canvas.ask_update()
+        self.engine.change_mode(EngineControls.MODE_IDLE)
 
 class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
@@ -750,11 +790,13 @@ class EngineControls:
     MODE_IDLE = 0
     MODE_ANALYZIN = 1
     MODE_PLAYING = 2
+    ALL_MODES = [MODE_IDLE, MODE_ANALYZIN, MODE_PLAYING]
 
     def __init__(self, parent):
         self.parent = parent
         self.engine = None
         self.mode = self.MODE_IDLE
+
         command = self._get_command()
         try:
             if not command is None:
@@ -764,6 +806,7 @@ class EngineControls:
         self._check_engine()
 
         self.last_rep_command = str()
+        self.last_rep = str()
         self.event = Clock.schedule_interval(self.handle_engine_result, 0.05)
         self.sync_engine_state()
         self._bind()
@@ -801,6 +844,19 @@ class EngineControls:
             sys.stderr.write("Must be Sayuri engine.\n")
             sys.stderr.flush()
 
+    def change_mode(self, m, condition=None):
+        if not m in self.ALL_MODES:
+            return False
+        if not condition is None:
+            if isinstance(condition, int) and \
+                   self.mode != condition:
+                return False
+            if isinstance(condition, list) and \
+                   not self.mode in condition:
+                return False
+        self.mode = m
+        return True
+
     def sync_engine_state(self):
         if not self.engine:
             return
@@ -823,6 +879,8 @@ class EngineControls:
             self.do_action(
                 { "action" : "play", "color" : col, "vertex" : vtx }
             )
+        if self.parent.config.get("game")["comp"].lower() != "na":
+            self.change_mode(EngineControls.MODE_PLAYING) 
 
     def do_action(self, action):
         if not self.engine:
@@ -845,7 +903,8 @@ class EngineControls:
         elif action["action"] == "genmove":
             col = action["color"]
             gtp_command = "sayuri-genmove_analyze {} playouts {}".format(
-                              col, 400)
+                              col, 12800)
+            self.analyzing = True
         else:
             return
 
@@ -860,19 +919,27 @@ class EngineControls:
         while not self.engine.query_empty():
             q = self.engine.get_last_query()
             self.last_rep_command = q.get_main_command()
+            self.last_rep = q.get_response()
 
         last_line = None
+        playmove = None
         while not self.engine.analysis_empty():
             line = self.engine.get_analysis_line()
             if line["type"] == "end":
                 self.analyzing = False
+            elif line["type"] == "play":
+                playmove = GtpVertex(line["data"].split()[-1])
             else:
                 last_line = line
+
+        if playmove and self.mode == self.MODE_PLAYING:
+            self.parent.tree.get_val()["move"] = playmove
+            self.parent.tree.update_tag()
 
         if self.analyzing and last_line:
             self.parent.tree.get_val()["analysis"] = AnalysisParser(last_line["data"])
             self.parent.tree.update_tag()
-            if not self.mode == self.MODE_ANALYZIN:
+            if self.mode == self.MODE_IDLE:
                 self.parent.engine.do_action({ "action" : "stop-analyze" })
 
         if not self.analyzing and \
@@ -932,10 +999,9 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
 
     def on_keyboard_down(self, keyboard, keycode, text, modifiers):
         if keycode[1] == "a" or keycode[1] == "spacebar":
-            if self.engine.mode == self.engine.MODE_IDLE:
-                self.engine.mode = self.engine.MODE_ANALYZIN
-            elif self.engine.mode == self.engine.MODE_ANALYZIN:
-                self.engine.mode = self.engine.MODE_IDLE
+            if self.engine.change_mode(EngineControls.MODE_ANALYZIN, EngineControls.MODE_IDLE) or \
+                   self.engine.change_mode(EngineControls.MODE_IDLE, EngineControls.MODE_ANALYZIN):
+                pass
         return True
 
 class GameAnalysisWidget(BoxLayout, BackgroundColor, Screen):
