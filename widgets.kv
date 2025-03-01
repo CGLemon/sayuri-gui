@@ -186,6 +186,7 @@
     orientation: "vertical"
     background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
     board_panel: board_panel
+    controls_panel: controls_panel
     config: app.config
 
     MenuPanelWidget:
@@ -210,6 +211,7 @@
         Label:
             size_hint: 0.05, 1
     ControlsPanelWidget:
+        id: controls_panel
         size_hint: 1, 0.05
         board: root.board
         board_panel: root.board_panel

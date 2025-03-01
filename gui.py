@@ -23,6 +23,8 @@ from theme import Theme
 import sgf_parser
 import sys, time, math
 
+from enum import Enum
+
 kivy.config.Config.set("input", "mouse", "mouse,multitouch_on_demand")
 DefaultConfig = JsonStore("config.json")
 
@@ -34,6 +36,11 @@ def draw_text(pos, text, color, **kw):
         texture=label.texture,
         pos=(pos[0] - label.texture.size[0] / 2, pos[1] - label.texture.size[1] / 2),
         size=label.texture.size)
+
+class GameMode(Enum):
+    IDLE = 0
+    ANALYZIN = 1
+    PLAYING = 2
 
 class BackgroundColor(Widget):
     pass
@@ -148,7 +155,6 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
         self.ghost_stone = None
         self.last_board_content_tag = None
         self.wait_for_comp_move = False
-        self.event = Clock.schedule_interval(self.draw_board_contents, 0.025)
 
     def on_mouse_pos(self, *args): # https://gist.github.com/opqopq/15c707dc4cffc2b6455f
         if self.get_root_window():  # don't proceed if I'm not displayed <=> If have no parent
@@ -254,16 +260,22 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
             return True
         return False
 
-
-    def acquire_comp_move(self):
-        if not self.should_lock_board():
-            return
-        if not self.wait_for_comp_move:
+    def handle_engine_move(self):
+        # acquire engine to genrate move
+        if self.should_lock_board() and \
+               not self.wait_for_comp_move:
             col = self.board.get_gtp_color(self.board.to_move)
             self.engine.do_action(
                 { "action" : "genmove", "color" : col}
             )
             self.wait_for_comp_move = True
+
+        # play the move on the board if possible
+        compvtx = self.tree.get_val().get("move")
+        if self.should_lock_board() and compvtx:
+            self.handle_play_move(
+                self.board.get_gtp_color(self.board.to_move), compvtx)
+            self.wait_for_comp_move = False
 
     def handle_play_move(self, col, vtx):
         self.engine.do_action(
@@ -301,28 +313,17 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
         sz = self.grid_size * scale
         Rectangle(pos=(self.gridpos_x[x] - sz/2, self.gridpos_y[y] - sz/2), size=(sz, sz))
 
-    def draw_board_contents(self, *args):
-        self.acquire_comp_move()
-
+    def draw_board_contents(self):
         curr_tag = self.tree.get_tag()
         if self.last_board_content_tag == curr_tag:
             return
         self.last_board_content_tag = curr_tag
         board = self.tree.get_val()["board"]
 
-        # handle computer move first and redraw the board next time
-        compvtx = self.tree.get_val().get("move")
-        if self.should_lock_board() and compvtx:
-            self.handle_play_move(
-                self.board.get_gtp_color(self.board.to_move), compvtx)
-            self.wait_for_comp_move = False
-            return
-
         # synchronize PV board
         forbid_pv = self.forbid_pv or \
                         not self.config.get("engine")["pv"]
         analysis = self.tree.get_val().get("analysis")
-        print(analysis)
         show_pv_board = not forbid_pv and \
                             not self.pv_start_pos is None and \
                             board.get_stone(self.pv_start_pos) == Board.EMPTY and \
@@ -552,9 +553,8 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
         super(ControlsPanelWidget, self).__init__(**kwargs)
         self.in_end_mode = False
-        self.event = Clock.schedule_interval(self.update_info, 0.1)
 
-    def update_info(self, *args):
+    def update_info(self):
         num_move = self.board.num_move
         if int(self.num_move_label.text) != num_move:
             self.num_move_label.text = str(num_move)
@@ -610,14 +610,12 @@ class ControlsPanelWidget(BoxLayout, BackgroundColor):
         self.manager.current = "game-setting"
         self.manager.get_screen(self.manager.current).sync_config()
         self.manager.get_screen(self.manager.current).canvas.ask_update()
-        self.engine.change_mode(EngineControls.MODE_IDLE)
 
     def switch_to_gameanalysis(self):
         self.manager.transition.direction = "right"
         self.manager.current = "game-analysis"
         self.manager.get_screen(self.manager.current).sync_config()
         self.manager.get_screen(self.manager.current).canvas.ask_update()
-        self.engine.change_mode(EngineControls.MODE_IDLE)
 
 class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
@@ -787,15 +785,9 @@ class InfoPanelWidget(BoxLayout):
         self.comment_panel.update_comment(self.tree)
 
 class EngineControls:
-    MODE_IDLE = 0
-    MODE_ANALYZIN = 1
-    MODE_PLAYING = 2
-    ALL_MODES = [MODE_IDLE, MODE_ANALYZIN, MODE_PLAYING]
-
     def __init__(self, parent):
         self.parent = parent
         self.engine = None
-        self.mode = self.MODE_IDLE
 
         command = self._get_command()
         try:
@@ -807,7 +799,6 @@ class EngineControls:
 
         self.last_rep_command = str()
         self.last_rep = str()
-        self.event = Clock.schedule_interval(self.handle_engine_result, 0.05)
         self.sync_engine_state()
         self._bind()
 
@@ -844,19 +835,6 @@ class EngineControls:
             sys.stderr.write("Must be Sayuri engine.\n")
             sys.stderr.flush()
 
-    def change_mode(self, m, condition=None):
-        if not m in self.ALL_MODES:
-            return False
-        if not condition is None:
-            if isinstance(condition, int) and \
-                   self.mode != condition:
-                return False
-            if isinstance(condition, list) and \
-                   not self.mode in condition:
-                return False
-        self.mode = m
-        return True
-
     def sync_engine_state(self):
         if not self.engine:
             return
@@ -879,8 +857,6 @@ class EngineControls:
             self.do_action(
                 { "action" : "play", "color" : col, "vertex" : vtx }
             )
-        if self.parent.config.get("game")["comp"].lower() != "na":
-            self.change_mode(EngineControls.MODE_PLAYING) 
 
     def do_action(self, action):
         if not self.engine:
@@ -903,7 +879,7 @@ class EngineControls:
         elif action["action"] == "genmove":
             col = action["color"]
             gtp_command = "sayuri-genmove_analyze {} playouts {}".format(
-                              col, 12800)
+                              col, 1600)
             self.analyzing = True
         else:
             return
@@ -912,7 +888,7 @@ class EngineControls:
         if action["action"] == "analyze":
             time.sleep(0.05)
 
-    def handle_engine_result(self, *args):
+    def handle_gtp_result(self):
         if not self.engine:
             return
 
@@ -932,18 +908,19 @@ class EngineControls:
             else:
                 last_line = line
 
-        if playmove and self.mode == self.MODE_PLAYING:
+        if playmove and \
+               self.parent.mode == GameMode.PLAYING:
             self.parent.tree.get_val()["move"] = playmove
             self.parent.tree.update_tag()
 
         if self.analyzing and last_line:
             self.parent.tree.get_val()["analysis"] = AnalysisParser(last_line["data"])
             self.parent.tree.update_tag()
-            if self.mode == self.MODE_IDLE:
+            if self.parent.mode == GameMode.IDLE:
                 self.parent.engine.do_action({ "action" : "stop-analyze" })
 
         if not self.analyzing and \
-               self.mode == self.MODE_ANALYZIN and \
+               self.parent.mode == GameMode.ANALYZIN and \
                not "analyze" in self.last_rep_command:
             col = self.parent.board.get_gtp_color(self.parent.board.to_move)
             self.parent.engine.do_action({ "action" : "analyze", "color" : col })
@@ -968,9 +945,45 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
             DefaultConfig.get("game")["komi"],
             DefaultConfig.get("game")["rule"])
         self.tree = Tree({ "board" : self.board.copy() })
+        self.mode = GameMode.IDLE
+        self.mode_temp = None
 
         self.engine = EngineControls(self)
         self._bind()
+        self.event = Clock.schedule_interval(self._loop, 0.025)
+
+    def _loop(self, *args):
+        if self.manager.current != "game" and \
+               self.mode != GameMode.IDLE:
+            self.mode_temp = self.mode
+            self.change_mode(GameMode.IDLE)
+            return
+
+        self.board_panel.draw_board_contents()
+        if self.mode == GameMode.PLAYING:
+            self.board_panel.handle_engine_move()
+        self.engine.handle_gtp_result()
+        self.controls_panel.update_info()
+
+    def change_mode(self, m, condition=None):
+        if not m in GameMode:
+            return False
+        if not condition is None:
+            if isinstance(condition, GameMode) and \
+                   self.mode != condition:
+                return False
+            if isinstance(condition, list) and \
+                   not self.mode in condition:
+                return False
+        self.mode = m
+        return True
+
+    def recover_mode(self):
+        if self.config.get("game")["comp"].lower() != "na":
+            self.change_mode(GameMode.PLAYING)
+        elif not self.mode_temp is None:
+            self.change_mode(self.mode_temp, GameMode.IDLE)
+        self.mode_temp = None
 
     def load_sgf(self, sgf):
         try:
@@ -979,8 +992,10 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
             self.config.get("game")["size"] = self.board.board_size
             self.config.get("game")["komi"] = self.board.komi
             self.config.get("game")["rule"] = ["chinese", "japanese"][self.board.scoring_rule]
+            self.config.get("game")["comp"] = "NA"
             self.board_panel.on_size() # redraw
             self.engine.sync_engine_state()
+            self.recover_mode()
         except Exception:
             pass
 
@@ -992,15 +1007,17 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
         self.tree.reset({ "board" : self.board.copy() })
         self.board_panel.on_size() # redraw
         self.engine.sync_engine_state()
+        self.recover_mode()
 
     def _bind(self):
         self.keyboard = Window.request_keyboard(None, self, "")
         self.keyboard.bind(on_key_down=self.on_keyboard_down)
 
     def on_keyboard_down(self, keyboard, keycode, text, modifiers):
-        if keycode[1] == "a" or keycode[1] == "spacebar":
-            if self.engine.change_mode(EngineControls.MODE_ANALYZIN, EngineControls.MODE_IDLE) or \
-                   self.engine.change_mode(EngineControls.MODE_IDLE, EngineControls.MODE_ANALYZIN):
+        if self.manager.current == "game" and \
+               (keycode[1] == "a" or keycode[1] == "spacebar"):
+            if self.change_mode(GameMode.ANALYZIN, GameMode.IDLE) or \
+                   self.change_mode(GameMode.IDLE, GameMode.ANALYZIN):
                 pass
         return True
 
