@@ -209,6 +209,9 @@ class GTPEnginePipe:
     def _gather_threads(self):
         return [self._send_query_thread, self._handle_gtp_thread, self._read_err_thread]
 
+    def get_remaining_queries(self):
+        return self._remaining
+
     def is_running(self):
         return self._running
 
@@ -219,11 +222,11 @@ class GTPEnginePipe:
         return self._analysis_queue.empty()
 
     def push_query(self, query):
-        self._remaining += 1
         try:
             self._query_queue.put(query)
+            self._remaining += 1
         except queue.Full:
-            self._remaining -= 1
+            pass
 
     def push_gtp_command(self, cmd):
         query = Query(
@@ -416,6 +419,9 @@ class GtpEngineBase:
 
     def get_last_query(self):
         return self._pipe.try_get_query(block=True)
+
+    def get_remaining_queries(self):
+        return self._pipe.get_remaining_queries()
 
     def setup(self):
         if self._pipe is None:

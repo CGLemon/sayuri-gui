@@ -162,31 +162,39 @@
         color: 0.95, 0.95, 0.95, 1
         background_color: 0, 0, 0, 0
 
-<InfoPanelWidget>
+<EngineInfoPanelWidget>:
     orientation: "vertical"
-    graph_panel: graph_panel
-    comment_panel: comment_panel
+    border_color: Theme.PANEL_LINE_COLOR.get()
+    background_color: Theme.DEFAULT_MENU_COLOR.get()
+    name_label: name_label
 
     Label:
-        size_hint: 1, 0.05
-    GraphPanelWidget:
-        id: graph_panel
-        size_hint: 1, 0.45
-        tree: self.tree
+        size_hint: 1, 0.02
+    StyledActionLabel:
+        id: name_label
+        size_hint: 1, 0.2
     Label:
-        size_hint: 1, 0.05
-    CommentPanelWidget
-        id: comment_panel
-        size_hint: 1, 0.35
-        tree: self.tree
+        size_hint: 1, 0.78
+
+<PlayerInfoPanelWidget>:
+    orientation: "vertical"
+    border_color: Theme.PANEL_LINE_COLOR.get()
+    background_color: Theme.DEFAULT_MENU_COLOR.get()
+
     Label:
-        size_hint: 1, 0.1
+        size_hint: 1, 0.02
+    StyledActionLabel:
+        size_hint: 1, 0.2
+        text: "Player"
+    Label:
+        size_hint: 1, 0.78
 
 <GamePanelWidget>:
     orientation: "vertical"
     background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
     board_panel: board_panel
     controls_panel: controls_panel
+    engine_info_panel: engine_info_panel
     config: app.config
 
     MenuPanelWidget:
@@ -196,20 +204,39 @@
         size_hint: 1, 0.9
         Label:
             size_hint: 0.02, 1
-        # InfoPanelWidget:
-        #     size_hint: 0.25, 1
-        #     tree: root.tree
+        BoxLayout:
+            orientation: "vertical"
+            size_hint: 0.16, 1
+            Label:
+                size_hint: 1, 0.05
+            EngineInfoPanelWidget:
+                id: engine_info_panel
+                engine: root.engine
+                size_hint: 1, 0.2
+            Label
+                size_hint: 1, 0.75
         Label:
             size_hint: 0.02, 1
         BoardPanelWidget:
             id: board_panel
-            size_hint: 0.5, 1
+            size_hint: 0.6, 1
             board: root.board
             tree: root.tree
             engine: root.engine
             game: root
         Label:
-            size_hint: 0.05, 1
+            size_hint: 0.02, 1
+        BoxLayout:
+            orientation: "vertical"
+            size_hint: 0.16, 1
+            Label:
+                size_hint: 1, 0.75
+            PlayerInfoPanelWidget:
+                size_hint: 1, 0.2
+            Label
+                size_hint: 1, 0.05
+        Label:
+            size_hint: 0.02, 1
     ControlsPanelWidget:
         id: controls_panel
         size_hint: 1, 0.05

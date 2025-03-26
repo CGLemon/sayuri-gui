@@ -39,7 +39,7 @@ def draw_text(pos, text, color, **kw):
 
 class GameMode(Enum):
     IDLE = 0
-    ANALYZIN = 1
+    ANALYZING = 1
     PLAYING = 2
 
 class BackgroundColor(Widget):
@@ -250,7 +250,8 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
 
     def should_lock_board(self):
         self.comp_side = self.config.get("game")["comp"]
-        if self.comp_side.lower() == "na":
+        if self.comp_side.lower() == "na" or \
+               self.board.num_passes >= 2:
             return False
         if self.comp_side.lower() == "b" and \
                self.board.to_move == Board.BLACK:
@@ -272,10 +273,14 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
 
         # play the move on the board if possible
         compvtx = self.tree.get_val().get("move")
-        if self.should_lock_board() and compvtx:
+        if self.wait_for_comp_move and \
+               self.should_lock_board() and \
+               compvtx:
             self.handle_play_move(
                 self.board.get_gtp_color(self.board.to_move), compvtx)
             self.wait_for_comp_move = False
+
+        return self.wait_for_comp_move
 
     def handle_play_move(self, col, vtx):
         self.engine.do_action(
@@ -718,71 +723,24 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
                 color=(0.95, 0.95, 0.95),
                 font_size=front_size)
 
-class CommentPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
+class EngineInfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
-        super(CommentPanelWidget, self).__init__(**kwargs)
-        self.last_board_content_tag = None
+        super(EngineInfoPanelWidget, self).__init__(**kwargs)
 
-    def on_size(self, *args):
-        self.last_board_content_tag = None
-
-    def update_comment(self, tree):
-        curr_tag = tree.get_tag()
-        if self.last_board_content_tag == curr_tag:
-            return
-        self.last_board_content_tag = curr_tag
-
-        graph_pos = [
-            self.tree_area.pos[0] + self.tree_area.size[0] * 0.1,
-            self.tree_area.pos[1]
-        ]
-        graph_size = [
-            self.tree_area.size[0] * 0.8,
-            self.tree_area.size[1]
-        ]
-
-        nodes = 0
-        for node in tree.get_root_mainpath():
-            nodes += 1
-        nodes = min(nodes, 10)
-        points = list()
-        if nodes > 1:
-            for i in range(nodes):
-                points.append(
-                    (graph_pos[0] + round(graph_size[0] / (nodes - 1) * i),
-                     graph_pos[1] + round(graph_size[1] / 2))
-                )
-        elif nodes == 1:
-            points.append(
-                (graph_pos[0] + round(graph_size[0] / 2),
-                 graph_pos[1] + round(graph_size[1] / 2))
-            )
-        self.canvas.before.clear()
-        with self.canvas.before:
-            pass
-            # if len(points) >= 2:
-            #     Color(0.95, 0.95, 0.95)
-            #     Line(points=points, width=1)
-            # for point in points:
-            #     Color(0.95, 0.95, 0.95)
-            #     psize = round(min(*graph_size) / 4)
-            #     Rectangle(
-            #         pos=(point[0] - psize//2, point[1] - psize//2),
-            #         size=(psize, psize)
-            #     )
-        if not tree.get_val().get("comment") is None:
-            self.comment_area.text = tree.get_val()["comment"]
+    def update_info(self):
+        if self.engine.valid():
+            name = "Sayuri"
+            if self.engine.get_mode() == GameMode.ANALYZING:
+                name += " (analyzing...)"
+            elif self.engine.get_mode() == GameMode.PLAYING:
+                name += " (playing)"
+            self.name_label.text = name
         else:
-            self.comment_area.text = str()
+            self.name_label.text = "NA"
 
-class InfoPanelWidget(BoxLayout):
+class PlayerInfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
-        super(InfoPanelWidget, self).__init__(**kwargs)
-        self.event = Clock.schedule_interval(self.update_info, 0.2)
-
-    def update_info(self, *args):
-        self.graph_panel.update_graph(self.tree)
-        self.comment_panel.update_comment(self.tree)
+        super(PlayerInfoPanelWidget, self).__init__(**kwargs)
 
 class EngineControls:
     def __init__(self, parent):
@@ -834,6 +792,15 @@ class EngineControls:
             self.engine = None
             sys.stderr.write("Must be Sayuri engine.\n")
             sys.stderr.flush()
+
+    def valid(self):
+        return not self.engine is None
+
+    def get_mode(self):
+        return self.parent.mode
+
+    def is_waiting_gtp_response(self):
+        return self.engine.get_remaining_queries() > 0
 
     def sync_engine_state(self):
         if not self.engine:
@@ -920,7 +887,7 @@ class EngineControls:
                 self.parent.engine.do_action({ "action" : "stop-analyze" })
 
         if not self.analyzing and \
-               self.parent.mode == GameMode.ANALYZIN and \
+               self.parent.mode == GameMode.ANALYZING and \
                not "analyze" in self.last_rep_command:
             col = self.parent.board.get_gtp_color(self.parent.board.to_move)
             self.parent.engine.do_action({ "action" : "analyze", "color" : col })
@@ -963,6 +930,7 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
         if self.mode == GameMode.PLAYING:
             self.board_panel.handle_engine_move()
         self.engine.handle_gtp_result()
+        self.engine_info_panel.update_info()
         self.controls_panel.update_info()
 
     def change_mode(self, m, condition=None):
@@ -1016,9 +984,15 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
     def on_keyboard_down(self, keyboard, keycode, text, modifiers):
         if self.manager.current == "game" and \
                (keycode[1] == "a" or keycode[1] == "spacebar"):
-            if self.change_mode(GameMode.ANALYZIN, GameMode.IDLE) or \
-                   self.change_mode(GameMode.IDLE, GameMode.ANALYZIN):
+            # ANALYZING <-> IDLE
+            if self.change_mode(GameMode.ANALYZING, GameMode.IDLE) or \
+                   self.change_mode(GameMode.IDLE, GameMode.ANALYZING):
                 pass
+
+            # ANALYZING <- PLAYING
+            if not self.engine.is_waiting_gtp_response() and \
+                   self.change_mode(GameMode.ANALYZING, GameMode.PLAYING):
+                self.config.get("game")["comp"] = "NA"
         return True
 
 class GameAnalysisWidget(BoxLayout, BackgroundColor, Screen):
