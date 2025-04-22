@@ -4,7 +4,7 @@
         "weights": "./engine/network.bin.txt",
         "threads": 4,
         "use_optimistic": true,
-        "load": false,
+        "load": true,
         "show": "W+V",
         "pv": true,
         "use_ownership": false
@@ -12,6 +12,7 @@
     "game" : {
         "size": 19,
         "komi": 6.5,
+        "comp" : "NA",
         "rule": "japanese",
         "maxsize": 19,
         "minsize": 2

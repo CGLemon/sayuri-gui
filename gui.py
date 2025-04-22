@@ -277,15 +277,16 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
                self.should_lock_board() and \
                compvtx:
             self.handle_play_move(
-                self.board.get_gtp_color(self.board.to_move), compvtx)
+                self.board.get_gtp_color(self.board.to_move), compvtx, False)
             self.wait_for_comp_move = False
 
         return self.wait_for_comp_move
 
-    def handle_play_move(self, col, vtx):
-        self.engine.do_action(
-            { "action" : "play", "color" : col, "vertex" : vtx }
-        )
+    def handle_play_move(self, col, vtx, use_engine=True):
+        if use_engine:
+            self.engine.do_action(
+                { "action" : "play", "color" : col, "vertex" : vtx }
+            )
         self.board.play(vtx, to_move=col)
         self.tree.add_and_forward(
             NodeKey(col, vtx), { "board" : self.board.copy() }
