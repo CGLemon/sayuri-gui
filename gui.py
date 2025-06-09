@@ -627,7 +627,7 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
         super(GraphPanelWidget, self).__init__(**kwargs)
 
-    def _get_stats_history(self, tree):
+    def _get_mainpath_stats(self, tree):
         pathinfo = list()
         for node in tree.get_root_mainpath():
             analysis = node.get_val().get("analysis")
@@ -659,70 +659,74 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
         return stats_history, depth
 
     def update_graph(self, tree):
-        stats_history, depth = self._get_stats_history(tree)
+        stats_history, depth = self._get_mainpath_stats(tree)
         self.canvas.clear()
         with self.canvas:
-            margin = 0.1
-            graph_pos = (self.pos[0],  self.pos[1] + self.height * margin)
-            graph_size = (self.width, self.height * (1.0 - margin))
+            graph_pos = (self.pos[0],  self.pos[1])
+            graph_size = (self.width, self.height)
 
-            mw = graph_size[0] / max(len(stats_history), 1)
-            winrate_points = list()
-
-            for i, stats in enumerate(stats_history):
+            valid = False
+            showdepth = depth
+            while showdepth >= 0 and not valid:
+                stats = stats_history[showdepth]
                 blackwinrate, drawrate, valid =\
                     stats["blackwinrate"], stats["drawrate"], stats["valid"]
-                wdl_rate = [
-                    blackwinrate - drawrate/2,
-                    blackwinrate + drawrate/2
+                showdepth -= 1
+
+            if self.engine.get_mode() != GameMode.ANALYZING and depth != showdepth+1:
+                valid = False
+
+            margin = 0.2
+            text_leftpos = [
+                self.pos[0] + self.width * margin/2.0,
+                self.pos[1] + self.height/2.0
+            ]
+            # text_rightpos = [
+            #     self.pos[0] + self.width * (1.0 - margin/2.0),
+            #     self.pos[1] + self.height/2.0
+            # ]
+            if valid:
+                blackbar_ratio = blackwinrate - drawrate/2
+                drawbar_ratio = drawrate
+                whitebar_ratio = 1.0 - (blackwinrate + drawrate/2)
+
+                bar_xpos = [
+                    graph_pos[0],
+                    graph_pos[0] + blackbar_ratio * graph_size[0],
+                    graph_pos[0] + (blackbar_ratio + drawbar_ratio) * graph_size[0],
+                    graph_pos[0] + (blackbar_ratio + drawbar_ratio + whitebar_ratio) * graph_size[0]
                 ]
-                wdl_ypos = [
-                    graph_pos[1] + 0,
-                    graph_pos[1] + round(wdl_rate[0] * graph_size[1]),
-                    graph_pos[1] + round(wdl_rate[1] * graph_size[1]),
-                    graph_pos[1] + graph_size[1]
+
+                Color(*Theme.BLACK_WINRATE_COLOR.get())
+                Rectangle(
+                    pos=(bar_xpos[0], graph_pos[1]),
+                    size=(bar_xpos[1] - bar_xpos[0], graph_size[1])
+                )
+                Color(*Theme.DRAWRATE_COLOR.get())
+                Rectangle(
+                    pos=(bar_xpos[1], graph_pos[1]),
+                    size=(bar_xpos[2] - bar_xpos[1], graph_size[1])
+                )
+                Color(*Theme.WHITE_WINRATE_COLOR.get())
+                Rectangle(
+                    pos=(bar_xpos[2], graph_pos[1]),
+                    size=(bar_xpos[3] - bar_xpos[2], graph_size[1])
+                )
+                text_1pos = [
+                    bar_xpos[-1] + self.width * margin/2.0,
+                    graph_pos[1] + self.height/2.0
                 ]
-                p0 = graph_pos[0] + round(mw * (i + 0.5))
-                if valid:
-                    Color(*Theme.BLACK_WINRATE_COLOR.get())
-                    Rectangle(
-                        pos=(graph_pos[0] + mw * i, wdl_ypos[0]),
-                        size=(mw, wdl_ypos[1] - wdl_ypos[0])
-                    )
-                    Color(*Theme.DRAWRATE_COLOR.get())
-                    Rectangle(
-                        pos=(graph_pos[0] + mw * i, wdl_ypos[1]),
-                        size=(mw, wdl_ypos[2] - wdl_ypos[1])
-                    )
-                    Color(*Theme.WHITE_WINRATE_COLOR.get())
-                    Rectangle(
-                        pos=(graph_pos[0] + mw * i, wdl_ypos[2]),
-                        size=(mw, wdl_ypos[3] - wdl_ypos[2])
-                    )
-                    winrate_points.append(
-                        (p0, graph_pos[1] + round(blackwinrate * graph_size[1]))
-                    )
-                if depth == i:
-                    Color(*Theme.WINRATE_AUX_LINE_COLOR.get())
-                    Line(points=[(p0, graph_pos[1]), (p0, graph_pos[1] + graph_size[1])],
-                         width=1.5)
-            if len(winrate_points) >= 2:
-                Color(*Theme.WINRATE_LINE_COLOR.get())
-                Line(points=winrate_points, width=1.5)
-            if len(stats_history) > 0:
-                stats = stats_history[depth]
-                front_size = round(min(self.width, self.height * margin)/2)
-                text_str = "Move {}: B {:.2f}% ({:.1f})".format(
-                    stats["bestmove"] if stats["bestmove"] else "null",
-                    stats["blackwinrate"] * 100, stats["blackscore"])
+                draw_text(
+                    pos=(text_leftpos[0], text_leftpos[1]),
+                    text="B: {:3.1f}% ({})".format(blackwinrate * 100.0, str(stats["bestmove"])),
+                    color=Theme.WHITE_STONE_COLOR.get(),
+                    font_size=self.height//1.5)
             else:
-                front_size = round(min(self.width, self.height * margin)/2)
-                text_str = "Move {}: B {:.2f}% ({:.1f})".format("null", 50.0, 0)
-            draw_text(
-                pos=(self.pos[0] + self.width/2, self.pos[1] + front_size),
-                text=text_str,
-                color=(0.95, 0.95, 0.95),
-                font_size=front_size)
+                draw_text(
+                    pos=(text_leftpos[0], text_leftpos[1]),
+                    text="B: {:3.1f}% ({})".format(50.0, "NA"),
+                    color=Theme.WHITE_STONE_COLOR.get(),
+                    font_size=self.height//1.5)
 
 class EngineInfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
@@ -933,6 +937,7 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
         self.engine.handle_gtp_result()
         self.engine_info_panel.update_info()
         self.controls_panel.update_info()
+        self.graph_info_panel.update_graph(self.tree)
 
     def change_mode(self, m, condition=None):
         if not m in GameMode:

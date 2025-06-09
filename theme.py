@@ -1,4 +1,3 @@
-
 class ColorCode:
     def __init__(self, code):
         self.code = list()
@@ -71,8 +70,8 @@ class Theme:
     UNDO_COLORS = [BLACK_UNDO_COLOR, WHITE_UNDO_COLOR]
     GHOST_ALPHA = 0.5
 
-    BLACK_WINRATE_COLOR = FAVOR_BLACK.bind_alpha(0.55)
-    WHITE_WINRATE_COLOR = FAVOR_WHITE.bind_alpha(0.55)
+    BLACK_WINRATE_COLOR = FAVOR_BLACK.bind_alpha(0.35)
+    WHITE_WINRATE_COLOR = FAVOR_WHITE.bind_alpha(0.35)
     DRAWRATE_COLOR = BLACK_WINRATE_COLOR.average_color(WHITE_WINRATE_COLOR)
     WINRATE_LINE_COLOR = FAVOR_GREEN.bind_alpha(0.55)
     WINRATE_AUX_LINE_COLOR = FAVOR_RED.bind_alpha(0.7)

@@ -195,6 +195,7 @@
     board_panel: board_panel
     controls_panel: controls_panel
     engine_info_panel: engine_info_panel
+    graph_info_panel: graph_info_panel
     config: app.config
 
     MenuPanelWidget:
@@ -217,13 +218,24 @@
                 size_hint: 1, 0.75
         Label:
             size_hint: 0.02, 1
-        BoardPanelWidget:
-            id: board_panel
+        BoxLayout:
+            orientation: "vertical"
             size_hint: 0.6, 1
-            board: root.board
-            tree: root.tree
-            engine: root.engine
-            game: root
+            BoardPanelWidget:
+                id: board_panel
+                size_hint: 1, 0.95
+                board: root.board
+                tree: root.tree
+                engine: root.engine
+                game: root
+            Label
+                size_hint: 1, 0.01
+            GraphPanelWidget:
+                id: graph_info_panel
+                size_hint: 1, 0.03
+                engine: root.engine
+            Label
+                size_hint: 1, 0.01
         Label:
             size_hint: 0.02, 1
         BoxLayout:
