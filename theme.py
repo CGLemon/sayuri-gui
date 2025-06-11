@@ -15,13 +15,6 @@ class ColorCode:
         other.code[-1] = alpha
         return other
 
-    def average_color(self, color):
-        retcode = list()
-        for a, b in zip(self.code, color.code):
-            retcode.append((a+b)/2)
-        other = ColorCode(retcode)
-        return other
-
     def get(self):
         return self.code
 
@@ -43,14 +36,23 @@ class ColorCode:
     def __str__(self):
         return "{}".format(self.code)
 
+def average_colorcode(colorlist):
+    retcode = [0, 0, 0, 0]
+    for color in colorlist:
+        for i in range(4):
+            retcode[i] += color.code[i] / len(colorlist)
+    avgcolor = ColorCode(retcode)
+    return avgcolor
+
 FAVOR_BLACK = ColorCode([0.1, 0.1, 0.1])
 FAVOR_WHITE = ColorCode([0.9, 0.9, 0.9])
-FAVOR_RED = ColorCode([0.95, 0.45, 0.55])
+FAVOR_RED   = ColorCode([0.95, 0.45, 0.55])
 FAVOR_GREEN = ColorCode([0.15, 0.82, 0.15])
 
 class Theme:
-    DEFAULT_BACKGROUND_COLOR = ColorCode([0.37, 0.501, 0.70, 1.0])
-    DEFAULT_MENU_COLOR = ColorCode([0.23, 0.30, 0.35, 1.0])
+    BACKGROUND_COLOR = ColorCode([0.37, 0.501, 0.70, 1.0])
+    MENU_BAR_COLOR = ColorCode([0.23, 0.30, 0.35, 1.0])
+    CARD_PANEL_COLOR = ColorCode([0.23, 0.30, 0.35, 1.0])
     PANEL_LINE_COLOR = ColorCode([0.95, 0.95, 0.95, 1.0])
 
     BLACK_STONE_COLOR = FAVOR_BLACK.bind_alpha(1.0)
@@ -72,7 +74,7 @@ class Theme:
 
     BLACK_WINRATE_COLOR = FAVOR_BLACK.bind_alpha(0.35)
     WHITE_WINRATE_COLOR = FAVOR_WHITE.bind_alpha(0.35)
-    DRAWRATE_COLOR = BLACK_WINRATE_COLOR.average_color(WHITE_WINRATE_COLOR)
+    DRAWRATE_COLOR = average_colorcode([BLACK_WINRATE_COLOR, WHITE_WINRATE_COLOR])
     WINRATE_LINE_COLOR = FAVOR_GREEN.bind_alpha(0.55)
     WINRATE_AUX_LINE_COLOR = FAVOR_RED.bind_alpha(0.7)
 
@@ -81,4 +83,18 @@ class Theme:
     STONE_SIZE = 0.45
     BOARD_COLOR = ColorCode([0.85, 0.68, 0.40])
     LINE_COLOR = ColorCode([0, 0, 0])
+
+    FONT_WHITE_COLOR = ColorCode([0.95, 0.95, 0.95, 1.0])
     FONT_SIZE = 18
+
+def replace_theme(idx):
+    if idx == 1:
+        Theme.BACKGROUND_COLOR = ColorCode([17, 17, 17, 255])
+        Theme.MENU_BAR_COLOR = ColorCode([45, 48, 70, 255])
+        Theme.CARD_PANEL_COLOR = ColorCode([45, 48, 70, 255])
+        Theme.PANEL_LINE_COLOR = ColorCode([0.85, 0.85, 0.85, 0.85])
+
+        Theme.BLACK_WINRATE_COLOR = FAVOR_BLACK.bind_alpha(0.55)
+        Theme.WHITE_WINRATE_COLOR = FAVOR_WHITE.bind_alpha(0.55)
+        Theme.DRAWRATE_COLOR = average_colorcode([Theme.BLACK_WINRATE_COLOR, Theme.WHITE_WINRATE_COLOR])
+        Theme.FONT_WHITE_COLOR = ColorCode([0.85, 0.85, 0.85, 0.85])

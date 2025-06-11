@@ -19,7 +19,7 @@ from tree import Tree, NodeKey
 from board import Board
 from gtp import GtpEngine, GtpVertex
 from analysis import AnalysisParser
-from theme import Theme
+from theme import Theme, replace_theme
 import sgf_parser
 import sys, time, math
 
@@ -1123,6 +1123,8 @@ class WindowApp(App):
         Window.size = (1200, 900)
 
         self.config = DefaultConfig
+        replace_theme(self.config.get("theme"))
+
         self.manager = ScreenManager()
         self.manager.add_widget(GamePanelWidget(name="game"))
         self.manager.add_widget(GameSettingWidget(name="game-setting"))

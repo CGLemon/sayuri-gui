@@ -16,5 +16,6 @@
         "rule": "japanese",
         "maxsize": 19,
         "minsize": 2
-    }
+    },
+    "theme" : 1
 }

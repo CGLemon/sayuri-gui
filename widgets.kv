@@ -60,7 +60,7 @@
 
 <MenuPanelWidget>:
     orientation: "vertical"
-    background_color: Theme.DEFAULT_MENU_COLOR.get()
+    background_color: Theme.MENU_BAR_COLOR.get()
     manager: app.manager
 
     Label:
@@ -77,7 +77,7 @@
 
 <ControlsPanelWidget>:
     orientation: "vertical"
-    background_color: Theme.DEFAULT_MENU_COLOR.get()
+    background_color: Theme.MENU_BAR_COLOR.get()
 	num_move_label: num_move_label
     pass_btn: pass_btn
     manager: app.manager
@@ -92,7 +92,8 @@
         StyledActionButton:
             id: pass_btn
             size_hint: 0.15, 1
-            border_color: self.color
+            color: Theme.FONT_WHITE_COLOR.get()
+            border_color: Theme.PANEL_LINE_COLOR.get()
             text: "Pass"
             on_release: root.play_pass()
         Label:
@@ -112,7 +113,8 @@
         StyledActionLabel:
             id: num_move_label
             size_hint: 0.1, 1
-            border_color: self.color
+            color: Theme.FONT_WHITE_COLOR.get()
+            border_color: Theme.PANEL_LINE_COLOR.get()
             text: "0"
         Label:
             size_hint: 0.025, 1
@@ -142,30 +144,12 @@
 <GraphPanelWidget>:
     opacity: 1
     border_color: Theme.PANEL_LINE_COLOR.get()
-    background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
-
-<CommentPanelWidget>:
-    opacity: 1
-    orientation: "vertical"
-    border_color: Theme.PANEL_LINE_COLOR.get()
-    background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
-
-    tree_area: tree_area
-    comment_area: comment_area
-
-    Label:
-        id: tree_area
-        size_hint: 1, 0.15
-    TextLabel:
-        id: comment_area
-        size_hint: 1, 0.85
-        color: 0.95, 0.95, 0.95, 1
-        background_color: 0, 0, 0, 0
+    background_color: Theme.BACKGROUND_COLOR.get()
 
 <EngineInfoPanelWidget>:
     orientation: "vertical"
     border_color: Theme.PANEL_LINE_COLOR.get()
-    background_color: Theme.DEFAULT_MENU_COLOR.get()
+    background_color: Theme.CARD_PANEL_COLOR.get()
     name_label: name_label
 
     Label:
@@ -173,25 +157,27 @@
     StyledActionLabel:
         id: name_label
         size_hint: 1, 0.2
+        color: Theme.FONT_WHITE_COLOR.get()
     Label:
         size_hint: 1, 0.78
 
 <PlayerInfoPanelWidget>:
     orientation: "vertical"
     border_color: Theme.PANEL_LINE_COLOR.get()
-    background_color: Theme.DEFAULT_MENU_COLOR.get()
+    background_color: Theme.CARD_PANEL_COLOR.get()
 
     Label:
         size_hint: 1, 0.02
     StyledActionLabel:
         size_hint: 1, 0.2
         text: "Player"
+        color: Theme.FONT_WHITE_COLOR.get()
     Label:
         size_hint: 1, 0.78
 
 <GamePanelWidget>:
     orientation: "vertical"
-    background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
+    background_color: Theme.BACKGROUND_COLOR.get()
     board_panel: board_panel
     controls_panel: controls_panel
     engine_info_panel: engine_info_panel
@@ -350,7 +336,7 @@
             elem_label.text = root.elemset[root.elemidx]
 
 <GameAnalysisWidget>:
-    background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
+    background_color: Theme.BACKGROUND_COLOR.get()
     orientation: "horizontal"
     show_bar: show_bar
     pv_bar: pv_bar
@@ -369,7 +355,7 @@
             size_hint: 1, 0.1
             elemset: ["W+V", "S+V", "W+V+S", "W+D+V", "P", "R", "NA"]
             itemtext: "Show"
-            itemcolor: 0.95, 0.95, 0.95, 1
+            itemcolor: Theme.FONT_WHITE_COLOR.get()
             itembold: True
         Label:
             size_hint: 1, 0.05
@@ -379,7 +365,7 @@
             elemset: ["False", "True"]
             elemidx: 1
             itemtext: "PV"
-            itemcolor: 0.95, 0.95, 0.95, 1
+            itemcolor: Theme.FONT_WHITE_COLOR.get()
             itembold: True
         Label:
             size_hint: 1, 0.05
@@ -388,7 +374,7 @@
             size_hint: 1, 0.1
             elemset: ["False", "True"]
             itemtext: "Ownership"
-            itemcolor: 0.95, 0.95, 0.95, 1
+            itemcolor: Theme.FONT_WHITE_COLOR.get()
             itembold: True
         Label:
             size_hint: 1, 0.25
@@ -399,21 +385,21 @@
                 size_hint: 0.45, 1
                 icon: "img/check.png"
                 on_release: root.confirm_and_back()
-                border_color: 0.95, 0.95, 0.95, 1
+                border_color: Theme.PANEL_LINE_COLOR.get()
             Label:
                 size_hint: 0.1, 1
             StyledActionButton:
                 size_hint: 0.45, 1
                 icon: "img/cross.png"
                 on_release: root.back_only()
-                border_color: 0.95, 0.95, 0.95, 1
+                border_color: Theme.PANEL_LINE_COLOR.get()
         Label:
             size_hint: 1, 0.4
     Label:
         size_hint: 0.25, 1
 
 <GameSettingWidget>:
-    background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
+    background_color: Theme.BACKGROUND_COLOR.get()
     orientation: "horizontal"
     comp_side_bar: comp_side_bar
     board_size_bar: board_size_bar
@@ -433,7 +419,7 @@
             size_hint: 1, 0.1
             elemset: ["NA", "B", "W"]
             itemtext: "Comp"
-            itemcolor: Theme.PANEL_LINE_COLOR.get()
+            itemcolor: Theme.FONT_WHITE_COLOR.get()
             itembold: True
         Label:
             size_hint: 1, 0.05
@@ -443,7 +429,7 @@
             valmax: root.config.get("game")["maxsize"]
             valmin: root.config.get("game")["minsize"]
             itemtext: "Size"
-            itemcolor: Theme.PANEL_LINE_COLOR.get()
+            itemcolor: Theme.FONT_WHITE_COLOR.get()
             itembold: True
         Label:
             size_hint: 1, 0.05
@@ -453,7 +439,7 @@
             type: "float"
             valstep: 0.5
             itemtext: "Komi"
-            itemcolor: Theme.PANEL_LINE_COLOR.get()
+            itemcolor: Theme.FONT_WHITE_COLOR.get()
             itembold: True
         Label:
             size_hint: 1, 0.05
@@ -462,7 +448,7 @@
             size_hint: 1, 0.1
             elemset: ["CN", "JP"]
             itemtext: "Rule"
-            itemcolor: Theme.PANEL_LINE_COLOR.get()
+            itemcolor: Theme.FONT_WHITE_COLOR.get()
             itembold: True
         Label:
             size_hint: 1, 0.25
@@ -487,7 +473,7 @@
         size_hint: 0.25, 1
 
 <GameIOWidget>:
-    background_color: Theme.DEFAULT_BACKGROUND_COLOR.get()
+    background_color: Theme.BACKGROUND_COLOR.get()
     orientation: "horizontal"
     config: app.config
     simple_board_panel: simple_board_panel
