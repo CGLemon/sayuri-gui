@@ -28,14 +28,48 @@ from enum import Enum
 kivy.config.Config.set("input", "mouse", "mouse,multitouch_on_demand")
 DefaultConfig = JsonStore("config.json")
 
-def draw_text(pos, text, color, **kw):
+def draw_text(pos, text, color, **kwargs):
     Color(*color)
-    label = CoreLabel(text=text, halign="center", valign="middle", bold=True, **kw)
+    label = CoreLabel(text=text, halign="center", valign="middle", bold=True, **kwargs)
     label.refresh()
     Rectangle(
         texture=label.texture,
         pos=(pos[0] - label.texture.size[0] / 2, pos[1] - label.texture.size[1] / 2),
         size=label.texture.size)
+
+def draw_circle(pos, stone_size, color=None, **kwargs):
+    outline_color = kwargs.get("outline_color", None)
+    scale = kwargs.get("scale", 1.0)
+    outline_scale = kwargs.get("outline_scale", 0.065)
+    outline_align = kwargs.get("outline_align", "outer")
+    group = kwargs.get("group", None)
+    stone_size = stone_size * scale
+    x, y = pos
+
+    if outline_color:
+        align_map = {
+            "inner" : 0,
+            "center" : 0.5,
+            "outer" : 1
+        }
+        Color(*outline_color)
+        width=outline_scale * stone_size
+        align_offset = width * align_map.get(outline_align, 0.5)
+        Line(circle=(x, y, stone_size + align_offset), width=width, group=group)
+    if color:
+        Color(*color)
+        r = stone_size
+        Ellipse(pos=(x - r, y - r), size=(2 * r, 2 * r), group=group)
+
+def comp_side_to_color(comp_side):
+    comp_color = None
+    if comp_side.lower() == "na":
+        comp_color = Board.INVLD
+    elif comp_side.lower() == "b":
+        comp_color = Board.BLACK
+    elif comp_side.lower() == "w":
+        comp_color = Board.WHITE
+    return comp_color
 
 class GameMode(Enum):
     IDLE = 0
@@ -53,26 +87,11 @@ class SimpleBoardPanelWidget(RectangleBorder):
         super(SimpleBoardPanelWidget, self).__init__(**kwargs)
 
     def draw_circle(self, x, y, color=None, **kwargs):
-        outline_color = kwargs.get("outline_color", None)
-        scale = kwargs.get("scale", 1.0)
-        outline_scale = kwargs.get("outline_scale", 0.065)
-        outline_align = kwargs.get("outline_align", "outer")
-        stone_size = self.stone_size * scale
-
-        if outline_color:
-            align_map = {
-                "inner" : 0,
-                "center" : 0.5,
-                "outer" : 1
-            }
-            Color(*outline_color)
-            width=outline_scale * stone_size
-            align_offset = width * align_map.get(outline_align, 0.5)
-            Line(circle=(self.gridpos_x[x], self.gridpos_y[y], stone_size + align_offset), width=width)
-        if color:
-            Color(*color)
-            r = stone_size
-            Ellipse(pos=(self.gridpos_x[x] - r, self.gridpos_y[y] - r), size=(2 * r, 2 * r))
+        draw_circle(
+            (self.gridpos_x[x], self.gridpos_y[y]),
+            self.stone_size,
+            color, **kwargs
+        )
 
     def on_size(self, *args):
         self.draw_board_only()
@@ -291,28 +310,6 @@ class BoardPanelWidget(SimpleBoardPanelWidget):
         self.tree.add_and_forward(
             NodeKey(col, vtx), { "board" : self.board.copy() }
         )
-
-    def draw_circle(self, x, y, color=None, **kwargs):
-        outline_color = kwargs.get("outline_color", None)
-        scale = kwargs.get("scale", 1.0)
-        outline_scale = kwargs.get("outline_scale", 0.065)
-        outline_align = kwargs.get("outline_align", "outer")
-        stone_size = self.stone_size * scale
-
-        if outline_color:
-            align_map = {
-                "inner" : 0,
-                "center" : 0.5,
-                "outer" : 1
-            }
-            Color(*outline_color)
-            width=outline_scale * stone_size
-            align_offset = width * align_map.get(outline_align, 0.5)
-            Line(circle=(self.gridpos_x[x], self.gridpos_y[y], stone_size + align_offset), width=width)
-        if color:
-            Color(*color)
-            r = stone_size
-            Ellipse(pos=(self.gridpos_x[x] - r, self.gridpos_y[y] - r), size=(2 * r, 2 * r))
 
     def draw_influence(self, x, y, color, scale):
         Color(*color)
@@ -638,6 +635,10 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
                 pathinfo.append((board, None))
         depth = min(tree.get_depth(), len(pathinfo) - 1)
 
+        # Our aim is to determine the optimal analysis results (such as winrate,
+        # scorelead, etc.) for every move. Should the current board position lack
+        # specific analysis data, we will default to the most recent analysis results
+        # obtained previously."
         blackwinrate, blackscore, drawrate, no_stats = 0.5, 0.0, 1.0, True
         stats_history = list()
         for board, info in reversed(pathinfo):
@@ -647,11 +648,13 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
                 blackscore = info["scorelead"] if col.is_black() else -info["scorelead"]
                 drawrate = info["drawrate"]
                 no_stats &= False
-            bestmove = None if info is None else info["move"]
+            bestmove = 0.0 if info is None else info["move"]
+            bestpolicy = None if info is None else info["prior"]
             stats_history.append(
                 {"blackwinrate" : blackwinrate,
                  "blackscore" : blackscore,
                  "drawrate" : drawrate,
+                 "bestpolicy": bestpolicy,
                  "bestmove" : bestmove,
                  "valid" : not no_stats}
             )
@@ -659,7 +662,14 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
         return stats_history, depth
 
     def update_graph(self, tree):
+        if self.engine.get_mode() == GameMode.PLAYING:
+            self.opacity = 0
+            return
+        self.opacity = 1
         stats_history, depth = self._get_mainpath_stats(tree)
+        blackwinrate_text = "{:3.1f}%".format(0.5 * 100.0)
+        bestmove_text = "{}".format(None)
+
         self.canvas.clear()
         with self.canvas:
             graph_pos = (self.pos[0],  self.pos[1])
@@ -716,21 +726,40 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
                     bar_xpos[-1] + self.width * margin/2.0,
                     graph_pos[1] + self.height/2.0
                 ]
-                draw_text(
-                    pos=(text_leftpos[0], text_leftpos[1]),
-                    text="B: {:3.1f}% ({})".format(blackwinrate * 100.0, str(stats["bestmove"])),
-                    color=Theme.WHITE_STONE_COLOR.get(),
-                    font_size=self.height//1.5)
-            else:
-                draw_text(
-                    pos=(text_leftpos[0], text_leftpos[1]),
-                    text="B: {:3.1f}% ({})".format(50.0, "NA"),
-                    color=Theme.WHITE_STONE_COLOR.get(),
-                    font_size=self.height//1.5)
+                blackwinrate_text = "{:3.1f}%".format(blackwinrate * 100.0)
+                bestmove_text = str(stats["bestmove"])
+            draw_text(
+                pos=(text_leftpos[0], text_leftpos[1]),
+                text="B: {} ({})".format(blackwinrate_text, bestmove_text),
+                color=Theme.WHITE_STONE_COLOR.get(),
+                font_size=self.height//1.5)
 
 class EngineInfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
         super(EngineInfoPanelWidget, self).__init__(**kwargs)
+
+    def redraw(self):
+        group = "engine_color"
+        self.canvas.remove_group(group)
+        if self.engine.get_mode() != GameMode.PLAYING:
+            return
+
+        comp_color = comp_side_to_color(self.config.get("game")["comp"])
+        with self.canvas:
+            stone_colors = Theme.STONE_COLORS
+            outline_colors = Theme.OUTLINE_COLORS
+            pos = (
+                self.pos[0] + self.width/2.0,
+                self.pos[1] + (self.height * 0.9)/2.0
+            )
+            stone_size = min(self.width, self.width)/8.0
+            draw_circle(
+                pos,
+                stone_size,
+                stone_colors[comp_color].get(),
+                outline_color=outline_colors[comp_color].get(),
+                group=group
+            )
 
     def update_info(self):
         if self.engine.valid():
@@ -740,12 +769,41 @@ class EngineInfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
             elif self.engine.get_mode() == GameMode.PLAYING:
                 name += " (playing)"
             self.name_label.text = name
+            self.redraw()
         else:
             self.name_label.text = "NA"
 
 class PlayerInfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
         super(PlayerInfoPanelWidget, self).__init__(**kwargs)
+
+    def redraw(self):
+        group = "engine_color"
+        self.canvas.remove_group(group)
+        if self.engine.get_mode() != GameMode.PLAYING:
+            return
+
+        comp_color = comp_side_to_color(self.config.get("game")["comp"])
+        player_color = [Board.WHITE, Board.BLACK, Board.EMPTY, Board.INVLD][comp_color]
+        with self.canvas:
+            stone_colors = Theme.STONE_COLORS
+            outline_colors = Theme.OUTLINE_COLORS
+            pos = (
+                self.pos[0] + self.width/2.0,
+                self.pos[1] + (self.height * 0.9)/2.0
+            )
+            stone_size = min(self.width, self.width)/8.0
+            draw_circle(
+                pos,
+                stone_size,
+                stone_colors[player_color].get(),
+                outline_color=outline_colors[player_color].get(),
+                group=group
+            )
+
+    def update_info(self):
+        if self.engine.valid():
+            self.redraw()
 
 class EngineControls:
     def __init__(self, parent):
@@ -925,6 +983,9 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
         self.event = Clock.schedule_interval(self._loop, 0.025)
 
     def _loop(self, *args):
+        # When we leave the current page, all computational activities, including
+        # analysis, must stop. We'll then save the current mode and resume its
+        # execution once we return to this page.
         if self.manager.current != "game" and \
                self.mode != GameMode.IDLE:
             self.mode_temp = self.mode
@@ -936,6 +997,7 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
             self.board_panel.handle_engine_move()
         self.engine.handle_gtp_result()
         self.engine_info_panel.update_info()
+        self.player_info_panel.update_info()
         self.controls_panel.update_info()
         self.graph_info_panel.update_graph(self.tree)
 
@@ -969,11 +1031,10 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
             self.config.get("game")["comp"] = "NA"
             self.board_panel.on_size() # redraw
             self.engine.sync_engine_state()
-            self.recover_mode()
         except Exception:
             pass
 
-    def sync_config(self):
+    def sync_config_and_reset(self):
         self.board.reset(
             self.config.get("game")["size"],
             self.config.get("game")["komi"],
@@ -981,7 +1042,6 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
         self.tree.reset({ "board" : self.board.copy() })
         self.board_panel.on_size() # redraw
         self.engine.sync_engine_state()
-        self.recover_mode()
 
     def _bind(self):
         self.keyboard = Window.request_keyboard(None, self, "")
@@ -1028,6 +1088,7 @@ class GameAnalysisWidget(BoxLayout, BackgroundColor, Screen):
         self.manager.transition.direction = "left"
         self.manager.current = "game"
         self.manager.get_screen(self.manager.current).canvas.ask_update()
+        self.manager.get_screen(self.manager.current).recover_mode()
 
     def confirm_and_back(self):
         self.config.get("engine")["show"] = self.show_bar.elem_label.text
@@ -1074,13 +1135,14 @@ class GameSettingWidget(BoxLayout, BackgroundColor, Screen):
         self.manager.transition.direction = "left"
         self.manager.current = "game"
         self.manager.get_screen(self.manager.current).canvas.ask_update()
+        self.manager.get_screen(self.manager.current).recover_mode()
 
     def confirm_and_back(self):
         self.config.get("game")["comp"] = self.comp_side_bar.elem_label.text
         self.config.get("game")["size"] = int(self.board_size_bar.value_label.text)
         self.config.get("game")["komi"] = float(self.komi_bar.value_label.text)
         self.config.get("game")["rule"] = self.rule_bar.elem_label.text
-        self.manager.get_screen("game").sync_config()
+        self.manager.get_screen("game").sync_config_and_reset()
         self.back_only()
 
 class GameIOWidget(BoxLayout, BackgroundColor, Screen):

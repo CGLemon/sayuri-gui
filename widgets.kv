@@ -181,6 +181,7 @@
     board_panel: board_panel
     controls_panel: controls_panel
     engine_info_panel: engine_info_panel
+    player_info_panel: player_info_panel
     graph_info_panel: graph_info_panel
     config: app.config
 
@@ -198,6 +199,7 @@
                 size_hint: 1, 0.05
             EngineInfoPanelWidget:
                 id: engine_info_panel
+                config: root.config
                 engine: root.engine
                 size_hint: 1, 0.2
             Label
@@ -230,6 +232,9 @@
             Label:
                 size_hint: 1, 0.75
             PlayerInfoPanelWidget:
+                id: player_info_panel
+                config: root.config
+                engine: root.engine
                 size_hint: 1, 0.2
             Label
                 size_hint: 1, 0.05
