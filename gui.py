@@ -29,20 +29,25 @@ kivy.config.Config.set("input", "mouse", "mouse,multitouch_on_demand")
 DefaultConfig = JsonStore("config.json")
 
 def draw_text(pos, text, color, **kwargs):
+    kwargs_ = kwargs.copy()
+    group = kwargs_.pop("group", None)
+
     Color(*color)
-    label = CoreLabel(text=text, halign="center", valign="middle", bold=True, **kwargs)
+    label = CoreLabel(text=text, halign="center", valign="middle", bold=True, **kwargs_)
     label.refresh()
     Rectangle(
         texture=label.texture,
         pos=(pos[0] - label.texture.size[0] / 2, pos[1] - label.texture.size[1] / 2),
-        size=label.texture.size)
+        size=label.texture.size,
+        group=group)
 
 def draw_circle(pos, stone_size, color=None, **kwargs):
-    outline_color = kwargs.get("outline_color", None)
-    scale = kwargs.get("scale", 1.0)
-    outline_scale = kwargs.get("outline_scale", 0.065)
-    outline_align = kwargs.get("outline_align", "outer")
-    group = kwargs.get("group", None)
+    kwargs_ = kwargs.copy()
+    outline_color = kwargs_.pop("outline_color", None)
+    scale = kwargs_.pop("scale", 1.0)
+    outline_scale = kwargs_.pop("outline_scale", 0.065)
+    outline_align = kwargs_.pop("outline_align", "outer")
+    group = kwargs_.pop("group", None)
     stone_size = stone_size * scale
     x, y = pos
 
@@ -668,6 +673,8 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
         self.opacity = 1
         stats_history, depth = self._get_mainpath_stats(tree)
         blackwinrate_text = "{:3.1f}%".format(0.5 * 100.0)
+        blackscore_text = "{:3.1f}".format(0.0)
+        bestpolicy_text = "{:3.1f}%".format(0.0 * 100.0)
         bestmove_text = "{}".format(None)
 
         self.canvas.clear()
@@ -686,15 +693,15 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
             if self.engine.get_mode() != GameMode.ANALYZING and depth != showdepth+1:
                 valid = False
 
-            margin = 0.2
+            margin = 0.25
             text_leftpos = [
                 self.pos[0] + self.width * margin/2.0,
                 self.pos[1] + self.height/2.0
             ]
-            # text_rightpos = [
-            #     self.pos[0] + self.width * (1.0 - margin/2.0),
-            #     self.pos[1] + self.height/2.0
-            # ]
+            text_rightpos = [
+                self.pos[0] + self.width * (1.0 - margin/2.0),
+                self.pos[1] + self.height/2.0
+            ]
             if valid:
                 blackbar_ratio = blackwinrate - drawrate/2
                 drawbar_ratio = drawrate
@@ -722,60 +729,24 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
                     pos=(bar_xpos[2], graph_pos[1]),
                     size=(bar_xpos[3] - bar_xpos[2], graph_size[1])
                 )
-                text_1pos = [
-                    bar_xpos[-1] + self.width * margin/2.0,
-                    graph_pos[1] + self.height/2.0
-                ]
                 blackwinrate_text = "{:3.1f}%".format(blackwinrate * 100.0)
+                blackscore_text = "{:3.1f}".format(stats["blackscore"])
+                bestpolicy_text = "{:3.1f}%".format(stats["bestpolicy"] * 100.0)
                 bestmove_text = str(stats["bestmove"])
             draw_text(
                 pos=(text_leftpos[0], text_leftpos[1]),
-                text="B: {} ({})".format(blackwinrate_text, bestmove_text),
+                text="B: {} ({})".format(blackwinrate_text, blackscore_text),
+                color=Theme.WHITE_STONE_COLOR.get(),
+                font_size=self.height//1.5)
+            draw_text(
+                pos=(text_rightpos[0], text_rightpos[1]),
+                text="Best: {} ({})".format(bestmove_text, bestpolicy_text),
                 color=Theme.WHITE_STONE_COLOR.get(),
                 font_size=self.height//1.5)
 
 class EngineInfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
     def __init__(self, **kwargs):
         super(EngineInfoPanelWidget, self).__init__(**kwargs)
-
-    def redraw(self):
-        group = "engine_color"
-        self.canvas.remove_group(group)
-        if self.engine.get_mode() != GameMode.PLAYING:
-            return
-
-        comp_color = comp_side_to_color(self.config.get("game")["comp"])
-        with self.canvas:
-            stone_colors = Theme.STONE_COLORS
-            outline_colors = Theme.OUTLINE_COLORS
-            pos = (
-                self.pos[0] + self.width/2.0,
-                self.pos[1] + (self.height * 0.9)/2.0
-            )
-            stone_size = min(self.width, self.width)/8.0
-            draw_circle(
-                pos,
-                stone_size,
-                stone_colors[comp_color].get(),
-                outline_color=outline_colors[comp_color].get(),
-                group=group
-            )
-
-    def update_info(self):
-        if self.engine.valid():
-            name = "Sayuri"
-            if self.engine.get_mode() == GameMode.ANALYZING:
-                name += " (analyzing...)"
-            elif self.engine.get_mode() == GameMode.PLAYING:
-                name += " (playing)"
-            self.name_label.text = name
-            self.redraw()
-        else:
-            self.name_label.text = "NA"
-
-class PlayerInfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
-    def __init__(self, **kwargs):
-        super(PlayerInfoPanelWidget, self).__init__(**kwargs)
 
     def redraw(self):
         group = "engine_color"
@@ -796,10 +767,60 @@ class PlayerInfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
             draw_circle(
                 pos,
                 stone_size,
+                color=stone_colors[comp_color].get(),
+                outline_color=outline_colors[comp_color].get(),
+                group=group)
+            draw_text(
+                pos=pos,
+                text="{}".format(self.board.prisoners[comp_color]),
+                color=stone_colors[player_color].get(),
+                font_size=stone_size,
+                group=group)
+
+    def update_info(self):
+        if self.engine.valid():
+            name = "Sayuri"
+            if self.engine.get_mode() == GameMode.ANALYZING:
+                name += " (analyzing...)"
+            elif self.engine.get_mode() == GameMode.PLAYING:
+                name += " (playing)"
+            self.name_label.text = name
+            self.redraw()
+        else:
+            self.name_label.text = "NA"
+
+class PlayerInfoPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
+    def __init__(self, **kwargs):
+        super(PlayerInfoPanelWidget, self).__init__(**kwargs)
+
+    def redraw(self):
+        group = "player_color"
+        self.canvas.remove_group(group)
+        if self.engine.get_mode() != GameMode.PLAYING:
+            return
+
+        comp_color = comp_side_to_color(self.config.get("game")["comp"])
+        player_color = [Board.WHITE, Board.BLACK, Board.EMPTY, Board.INVLD][comp_color]
+        with self.canvas:
+            stone_colors = Theme.STONE_COLORS
+            outline_colors = Theme.OUTLINE_COLORS
+            pos = (
+                self.pos[0] + self.width/2.0,
+                self.pos[1] + (self.height * 0.9)/2.0
+            )
+            stone_size = min(self.width, self.width)/8.0
+            draw_circle(
+                pos,
+                stone_size,
                 stone_colors[player_color].get(),
                 outline_color=outline_colors[player_color].get(),
-                group=group
-            )
+                group=group)
+            draw_text(
+                pos=pos,
+                text="{}".format(self.board.prisoners[player_color]),
+                color=stone_colors[comp_color].get(),
+                font_size=stone_size,
+                group=group)
 
     def update_info(self):
         if self.engine.valid():
