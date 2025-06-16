@@ -88,7 +88,9 @@ class Theme:
     FONT_SIZE = 18
 
 def replace_theme(idx):
-    if idx == 1:
+    if idx == 0:
+        pass
+    elif idx == 1:
         Theme.BACKGROUND_COLOR = ColorCode([17, 17, 17, 255])
         Theme.MENU_BAR_COLOR = ColorCode([45, 48, 70, 255])
         Theme.CARD_PANEL_COLOR = ColorCode([45, 48, 70, 255])
@@ -98,3 +100,5 @@ def replace_theme(idx):
         Theme.WHITE_WINRATE_COLOR = FAVOR_WHITE.bind_alpha(0.55)
         Theme.DRAWRATE_COLOR = average_colorcode([Theme.BLACK_WINRATE_COLOR, Theme.WHITE_WINRATE_COLOR])
         Theme.FONT_WHITE_COLOR = ColorCode([0.85, 0.85, 0.85, 0.85])
+    else:
+        raise Exception("Unknown theme index.")

@@ -1,6 +1,6 @@
-# go-gui
+# Sayrui GUI
 
-The GUI designed for [Sayuri](https://github.com/CGLemon/Sayuri) engine.
+The analysis tool designed for [Sayuri](https://github.com/CGLemon/Sayuri) engine.
 
 <div id="screenshot" align="center">
     </br>

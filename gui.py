@@ -15,25 +15,25 @@ from kivy.clock import Clock
 from kivy.core.text import Label as CoreLabel
 from kivy.storage.jsonstore import JsonStore
 
-from tree import Tree, NodeKey
-from board import Board
-from gtp import GtpEngine, GtpVertex
-from analysis import AnalysisParser
-from theme import Theme, replace_theme
-import sgf_parser
-import sys, time, math
+from game.tree import Tree, NodeKey
+from game.board import Board
+from game.gtp import GtpEngine, GtpVertex
+from game.analysis import AnalysisParser
+import game.sgf_parser as sgf_parser
 
+from theme import Theme, replace_theme
+import sys, time, math
 from enum import Enum
 
 kivy.config.Config.set("input", "mouse", "mouse,multitouch_on_demand")
 DefaultConfig = JsonStore("config.json")
 
 def draw_text(pos, text, color, **kwargs):
-    kwargs_ = kwargs.copy()
-    group = kwargs_.pop("group", None)
+    _kwargs = kwargs.copy()
+    group = _kwargs.pop("group", None)
 
     Color(*color)
-    label = CoreLabel(text=text, halign="center", valign="middle", bold=True, **kwargs_)
+    label = CoreLabel(text=text, halign="center", valign="middle", bold=True, **_kwargs)
     label.refresh()
     Rectangle(
         texture=label.texture,
@@ -42,12 +42,12 @@ def draw_text(pos, text, color, **kwargs):
         group=group)
 
 def draw_circle(pos, stone_size, color=None, **kwargs):
-    kwargs_ = kwargs.copy()
-    outline_color = kwargs_.pop("outline_color", None)
-    scale = kwargs_.pop("scale", 1.0)
-    outline_scale = kwargs_.pop("outline_scale", 0.065)
-    outline_align = kwargs_.pop("outline_align", "outer")
-    group = kwargs_.pop("group", None)
+    _kwargs = kwargs.copy()
+    outline_color = _kwargs.pop("outline_color", None)
+    scale = _kwargs.pop("scale", 1.0)
+    outline_scale = _kwargs.pop("outline_scale", 0.065)
+    outline_align = _kwargs.pop("outline_align", "outer")
+    group = _kwargs.pop("group", None)
     stone_size = stone_size * scale
     x, y = pos
 
@@ -653,8 +653,8 @@ class GraphPanelWidget(BoxLayout, BackgroundColor, RectangleBorder):
                 blackscore = info["scorelead"] if col.is_black() else -info["scorelead"]
                 drawrate = info["drawrate"]
                 no_stats &= False
-            bestmove = 0.0 if info is None else info["move"]
-            bestpolicy = None if info is None else info["prior"]
+            bestmove = None if info is None else info["move"]
+            bestpolicy = 0.0 if info is None else info["prior"]
             stats_history.append(
                 {"blackwinrate" : blackwinrate,
                  "blackscore" : blackscore,
@@ -884,6 +884,8 @@ class EngineControls:
         return self.parent.mode
 
     def is_waiting_gtp_response(self):
+        if not self.engine:
+            return False
         return self.engine.get_remaining_queries() > 0
 
     def sync_engine_state(self):
@@ -896,9 +898,13 @@ class EngineControls:
         self.engine.send_command("komi {}".format(board.komi))
 
         if board.scoring_rule == Board.SCORING_TERRITORY:
-            self.engine.send_command("sayuri-setoption name scoring rule value {}".format("territory"))
+            scoring = "territory"
         elif board.scoring_rule == Board.SCORING_AREA:
-            self.engine.send_command("sayuri-setoption name scoring rule value {}".format("area"))
+            scoring = "area"
+        else:
+            scoring = None
+        self.engine.send_command(
+                "sayuri-setoption name scoring rule value {}".format(scoring))
 
         leaf_tag = self.parent.tree.get_tag()
         curr = self.parent.tree.root
@@ -1076,7 +1082,7 @@ class GamePanelWidget(BoxLayout, BackgroundColor, Screen):
                    self.change_mode(GameMode.IDLE, GameMode.ANALYZING):
                 pass
 
-            # ANALYZING <- PLAYING
+            # PLAYING -> ANALYZING
             if not self.engine.is_waiting_gtp_response() and \
                    self.change_mode(GameMode.ANALYZING, GameMode.PLAYING):
                 self.config.get("game")["comp"] = "NA"
@@ -1202,7 +1208,7 @@ class GameIOWidget(BoxLayout, BackgroundColor, Screen):
 
 class WindowApp(App):
     def build(self):
-        self.title = "Go GUI"
+        self.title = "Sayuri"
         Window.size = (1200, 900)
 
         self.config = DefaultConfig
