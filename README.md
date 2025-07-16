@@ -1,4 +1,4 @@
-# Sayrui GUI
+# Sayuri GUI
 
 The analysis tool designed for [Sayuri](https://github.com/CGLemon/Sayuri) engine.
 
