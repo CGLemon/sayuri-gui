@@ -3,6 +3,7 @@ from .common import BackgroundColor
 
 from game.board import Board
 from game.gtp import GtpVertex
+from game.tree import NodeKey
 
 class ControlsPanelWidget(BoxLayout, BackgroundColor):
     def __init__(self, **kwargs):
